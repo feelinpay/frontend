@@ -144,7 +144,7 @@ class _CountryPickerState extends State<CountryPicker> {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF667EEA),
+                    color: const Color(0xFF8B5CF6),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(

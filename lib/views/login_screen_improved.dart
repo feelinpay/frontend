@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:form_validator/form_validator.dart';
 import '../services/feelin_pay_service.dart';
 import 'country_picker.dart';
-import 'dashboard_improved.dart';
 import 'password_recovery_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -168,14 +167,14 @@ class _LoginScreenState extends State<LoginScreen>
                     height: 48,
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                        colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF667EEA).withOpacity(0.3),
+                          color: const Color(0xFF8B5CF6).withOpacity(0.3),
                           spreadRadius: 0,
                           blurRadius: 8,
                           offset: const Offset(0, 4),
@@ -269,9 +268,9 @@ class _LoginScreenState extends State<LoginScreen>
           print('🔍 [LOGIN SCREEN] Redirigiendo al dashboard...');
           if (mounted) {
             print('🔍 [LOGIN SCREEN] Context mounted, navegando...');
-            Navigator.pushReplacement(
+            Navigator.pushReplacementNamed(
               context,
-              MaterialPageRoute(builder: (context) => const DashboardScreen()),
+              '/dashboard',
             );
             print('🔍 [LOGIN SCREEN] Navegación ejecutada');
           }
@@ -450,36 +449,36 @@ class _LoginScreenState extends State<LoginScreen>
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         // Espaciado superior adaptativo
-        SizedBox(height: isVerySmallScreen ? 20 : (isSmallScreen ? 30 : 40)),
+        SizedBox(height: isVerySmallScreen ? 10 : (isSmallScreen ? 15 : 20)),
 
         // Logo y título moderno
         _buildHeader(isSmallScreen, isVerySmallScreen),
 
-        SizedBox(height: isVerySmallScreen ? 24 : (isSmallScreen ? 32 : 48)),
+        SizedBox(height: isVerySmallScreen ? 16 : (isSmallScreen ? 20 : 24)),
 
         // Card principal con formulario
         _buildMainCard(isSmallScreen, isVerySmallScreen),
 
-        SizedBox(height: isVerySmallScreen ? 20 : (isSmallScreen ? 24 : 32)),
+        SizedBox(height: isVerySmallScreen ? 12 : (isSmallScreen ? 16 : 20)),
 
         // Enlaces adicionales
         _buildAdditionalLinks(),
 
         // Espaciado inferior adaptativo
-        SizedBox(height: isVerySmallScreen ? 20 : (isSmallScreen ? 30 : 40)),
+        SizedBox(height: isVerySmallScreen ? 10 : (isSmallScreen ? 15 : 20)),
       ],
     );
   }
 
   Widget _buildHeader(bool isSmallScreen, bool isVerySmallScreen) {
-    final logoSize = isVerySmallScreen ? 60.0 : (isSmallScreen ? 70.0 : 80.0);
-    final iconSize = isVerySmallScreen ? 30.0 : (isSmallScreen ? 35.0 : 40.0);
+    final logoSize = isVerySmallScreen ? 50.0 : (isSmallScreen ? 55.0 : 60.0);
+    final iconSize = isVerySmallScreen ? 25.0 : (isSmallScreen ? 28.0 : 30.0);
     final titleFontSize = isVerySmallScreen
-        ? 24.0
-        : (isSmallScreen ? 28.0 : 32.0);
+        ? 20.0
+        : (isSmallScreen ? 22.0 : 24.0);
     final subtitleFontSize = isVerySmallScreen
-        ? 14.0
-        : (isSmallScreen ? 16.0 : 18.0);
+        ? 10.0
+        : (isSmallScreen ? 11.0 : 12.0);
 
     return Column(
       children: [
@@ -533,7 +532,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Widget _buildMainCard(bool isSmallScreen, bool isVerySmallScreen) {
-    final padding = isVerySmallScreen ? 20.0 : (isSmallScreen ? 24.0 : 32.0);
+    final padding = isVerySmallScreen ? 16.0 : (isSmallScreen ? 18.0 : 20.0);
     final borderRadius = isVerySmallScreen
         ? 16.0
         : (isSmallScreen ? 20.0 : 24.0);
@@ -568,13 +567,13 @@ class _LoginScreenState extends State<LoginScreen>
             // Campos del formulario
             if (!_isLoginMode) ...[
               _buildNameField(isSmallScreen, isVerySmallScreen),
-              SizedBox(height: isVerySmallScreen ? 16 : 20),
+              SizedBox(height: isVerySmallScreen ? 8 : 12),
               _buildPhoneField(isSmallScreen, isVerySmallScreen),
-              SizedBox(height: isVerySmallScreen ? 16 : 20),
+              SizedBox(height: isVerySmallScreen ? 8 : 12),
             ],
 
             _buildEmailField(isSmallScreen, isVerySmallScreen),
-            SizedBox(height: isVerySmallScreen ? 16 : 20),
+            SizedBox(height: isVerySmallScreen ? 8 : 12),
 
             _buildPasswordField(isSmallScreen, isVerySmallScreen),
 
@@ -600,13 +599,6 @@ class _LoginScreenState extends State<LoginScreen>
 
             // Botón principal
             _buildMainButton(isSmallScreen, isVerySmallScreen),
-
-            SizedBox(
-              height: isVerySmallScreen ? 16 : (isSmallScreen ? 20 : 24),
-            ),
-
-            // Botón de cambio de modo
-            _buildToggleButton(isSmallScreen, isVerySmallScreen),
           ],
         ),
       ),
@@ -748,7 +740,7 @@ class _LoginScreenState extends State<LoginScreen>
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(borderRadius),
-              borderSide: const BorderSide(color: Color(0xFF667EEA), width: 2),
+              borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
             ),
             filled: true,
             fillColor: const Color(0xFFF9FAFB),
@@ -864,7 +856,7 @@ class _LoginScreenState extends State<LoginScreen>
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(borderRadius),
                     borderSide: const BorderSide(
-                      color: Color(0xFF667EEA),
+                      color: Color(0xFF8B5CF6),
                       width: 2,
                     ),
                   ),
@@ -938,7 +930,7 @@ class _LoginScreenState extends State<LoginScreen>
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(borderRadius),
-              borderSide: const BorderSide(color: Color(0xFF667EEA), width: 2),
+              borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
             ),
             filled: true,
             fillColor: const Color(0xFFF9FAFB),
@@ -1012,7 +1004,7 @@ class _LoginScreenState extends State<LoginScreen>
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(borderRadius),
-              borderSide: const BorderSide(color: Color(0xFF667EEA), width: 2),
+              borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
             ),
             filled: true,
             fillColor: const Color(0xFFF9FAFB),
@@ -1142,7 +1134,7 @@ class _LoginScreenState extends State<LoginScreen>
       child: ElevatedButton(
         onPressed: _isLoading ? null : (_isLoginMode ? _login : _register),
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF667EEA),
+          backgroundColor: const Color(0xFF8B5CF6),
           foregroundColor: Colors.white,
           elevation: 0,
           shadowColor: Colors.transparent,
@@ -1170,33 +1162,6 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildToggleButton(bool isSmallScreen, bool isVerySmallScreen) {
-    final fontSize = isVerySmallScreen ? 12.0 : (isSmallScreen ? 13.0 : 14.0);
-
-    return Center(
-      child: TextButton(
-        onPressed: _toggleMode,
-        child: RichText(
-          text: TextSpan(
-            text: _isLoginMode ? '¿No tienes cuenta? ' : '¿Ya tienes cuenta? ',
-            style: TextStyle(
-              color: const Color(0xFF64748B),
-              fontSize: fontSize,
-            ),
-            children: [
-              TextSpan(
-                text: _isLoginMode ? 'Regístrate' : 'Inicia sesión',
-                style: const TextStyle(
-                  color: Color(0xFF667EEA),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildAdditionalLinks() {
     return Column(
@@ -1214,7 +1179,7 @@ class _LoginScreenState extends State<LoginScreen>
             child: const Text(
               '¿Olvidaste tu contraseña?',
               style: TextStyle(
-                color: Color(0xFF667EEA),
+                color: Color(0xFF8B5CF6),
                 fontWeight: FontWeight.w500,
               ),
             ),

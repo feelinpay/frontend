@@ -7,11 +7,18 @@ class AuthController extends ChangeNotifier {
   // Usar FeelinPayService directamente
 
   UserModel? _currentUser;
+  
+  // Getter público para acceso desde fuera
+  UserModel? get currentUserPublic => _currentUser;
   bool _isLoading = false;
   String? _error;
 
   // Getters
-  UserModel? get currentUser => _currentUser;
+  UserModel? get currentUser {
+    print('🔍 [AUTH CONTROLLER] Accediendo a currentUser: $_currentUser');
+    print('🔍 [AUTH CONTROLLER] ID del AuthController: ${this.hashCode}');
+    return _currentUser;
+  }
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isAuthenticated => _currentUser != null;
@@ -25,6 +32,40 @@ class AuthController extends ChangeNotifier {
     _clearError();
 
     try {
+      // Simular login exitoso para testing
+      // TODO: Reemplazar con llamada real al backend
+      await Future.delayed(const Duration(milliseconds: 1000));
+      
+      // Crear usuario de prueba
+      final isSuperAdmin = email.toLowerCase().contains('admin') || 
+                          email.toLowerCase().contains('super') ||
+                          email == 'admin@test.com' ||
+                          email == 'superadmin@test.com';
+      
+      _currentUser = UserModel(
+        id: '1',
+        nombre: isSuperAdmin ? 'Super Admin' : 'Usuario Demo',
+        telefono: '+51 987654321',
+        email: email,
+        rolId: isSuperAdmin ? 'super_admin' : 'propietario',
+        rol: isSuperAdmin ? 'super_admin' : 'propietario',
+        activo: true,
+        enPeriodoPrueba: true,
+        diasPruebaRestantes: 30,
+        emailVerificado: true,
+        createdAt: DateTime.now(),
+        lastLoginAt: DateTime.now(),
+      );
+      
+      print('🔍 [AUTH CONTROLLER] Usuario creado: $_currentUser');
+      print('🔍 [AUTH CONTROLLER] Rol: ${_currentUser?.rol}');
+      print('🔍 [AUTH CONTROLLER] ¿Es Super Admin?: ${_currentUser?.isSuperAdmin}');
+      print('🔍 [AUTH CONTROLLER] ID del AuthController: ${this.hashCode}');
+      notifyListeners();
+      return true;
+      
+      // Código original para cuando el backend esté listo:
+      /*
       final response = await FeelinPayService.login(
         email: email,
         password: password,
@@ -38,6 +79,7 @@ class AuthController extends ChangeNotifier {
         _setError(response['message'] ?? 'Error en el login');
         return false;
       }
+      */
     } catch (e) {
       _setError('Error de conexión: $e');
       return false;
@@ -92,6 +134,21 @@ class AuthController extends ChangeNotifier {
     } finally {
       _currentUser = null;
       _setLoading(false);
+      notifyListeners();
+    }
+  }
+
+  /// Cambiar rol del usuario (solo para testing)
+  void changeUserRole(String newRole) {
+    if (_currentUser != null) {
+      print('🔍 [AUTH CONTROLLER] Cambiando rol de ${_currentUser!.rol} a $newRole');
+      _currentUser = _currentUser!.copyWith(
+        rol: newRole,
+        rolId: newRole,
+        nombre: newRole == 'super_admin' ? 'Super Admin' : 'Usuario Demo',
+      );
+      print('🔍 [AUTH CONTROLLER] Nuevo rol: ${_currentUser!.rol}');
+      print('🔍 [AUTH CONTROLLER] ¿Es Super Admin?: ${_currentUser!.isSuperAdmin}');
       notifyListeners();
     }
   }

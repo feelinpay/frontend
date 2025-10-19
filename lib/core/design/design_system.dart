@@ -7,25 +7,27 @@ class DesignSystem {
   static const double tabletBreakpoint = 900;
   static const double desktopBreakpoint = 1200;
 
-  // Colores principales
-  static const Color primaryColor = Color(0xFF1E40AF);
-  static const Color primaryLight = Color(0xFF3B82F6);
-  static const Color primaryDark = Color(0xFF1E3A8A);
+  // Colores principales - Basados en el diseño de la imagen
+  static const Color primaryColor = Color(0xFF8B5CF6); // Morado principal
+  static const Color primaryLight = Color(0xFFA855F7); // Morado claro
+  static const Color primaryDark = Color(0xFF7C3AED); // Morado oscuro
   static const Color secondaryColor = Color(0xFF8B5CF6);
-  static const Color accentColor = Color(0xFF10B981);
-  static const Color errorColor = Color(0xFFEF4444);
-  static const Color warningColor = Color(0xFFF59E0B);
-  static const Color successColor = Color(0xFF10B981);
+  static const Color accentColor = Color(0xFF8B5CF6); // Lila para acentos
+  static const Color errorColor = Color(0xFFEF4444); // Rojo para errores (mantener)
+  static const Color warningColor = Color(0xFFA855F7); // Lila claro para advertencias
+  static const Color successColor = Color(0xFF8B5CF6); // Lila para éxito
 
-  // Colores de fondo
-  static const Color backgroundColor = Color(0xFFF8FAFC);
+  // Colores de fondo - Basados en el diseño de la imagen
+  static const Color backgroundColor = Color(0xFFFFFFFF); // Blanco puro
   static const Color surfaceColor = Color(0xFFFFFFFF);
   static const Color cardColor = Color(0xFFFFFFFF);
+  static const Color bottomNavColor = Color(0xFF2D3748); // Gris oscuro para navegación inferior
 
-  // Colores de texto
-  static const Color textPrimary = Color(0xFF1E293B);
+  // Colores de texto - Basados en el diseño de la imagen
+  static const Color textPrimary = Color(0xFF2D3748); // Gris oscuro
   static const Color textSecondary = Color(0xFF64748B);
   static const Color textTertiary = Color(0xFF94A3B8);
+  static const Color textLight = Color(0xFF9CA3AF); // Gris claro para placeholders
 
   // Espaciado
   static const double spacingXS = 4.0;

@@ -191,7 +191,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF667EEA)),
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B5CF6)),
               ),
               SizedBox(height: 16),
               Text(
@@ -369,8 +369,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                               decoration: BoxDecoration(
                                 gradient: const LinearGradient(
                                   colors: [
-                                    Color(0xFF667EEA),
-                                    Color(0xFF764BA2),
+                                    Color(0xFF8B5CF6),
+                                    Color(0xFF7C3AED),
                                   ],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
@@ -379,7 +379,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 boxShadow: [
                                   BoxShadow(
                                     color: const Color(
-                                      0xFF667EEA,
+                                      0xFF8B5CF6,
                                     ).withOpacity(0.3),
                                     spreadRadius: 0,
                                     blurRadius: 20,
@@ -563,14 +563,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                         padding: const EdgeInsets.all(32),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                            colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF667EEA).withOpacity(0.3),
+                              color: const Color(0xFF8B5CF6).withOpacity(0.3),
                               spreadRadius: 0,
                               blurRadius: 20,
                               offset: const Offset(0, 8),
