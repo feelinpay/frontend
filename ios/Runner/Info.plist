@@ -55,17 +55,17 @@
 		<string>background-app-refresh</string>
 	</array>
 	
-	<!-- Permisos para acceso a notificaciones del sistema -->
+	<!-- Permisos para notificaciones (solo para leer notificaciones de Yape) -->
 	<key>NSUserNotificationsUsageDescription</key>
-	<string>Esta aplicación necesita acceso a las notificaciones del sistema para detectar pagos de Yape automáticamente.</string>
+	<string>Feelin Pay necesita leer notificaciones de pagos de Yape (Perú) para detectar transacciones automáticamente.</string>
 	
-	<!-- Permisos para SMS -->
-	<key>NSContactsUsageDescription</key>
-	<string>Esta aplicación necesita acceso a los contactos para enviar SMS de confirmación de pagos.</string>
+	<!-- Permisos para SMS (iOS no permite acceso directo a SMS, pero se puede enviar) -->
+	<key>NSMessageUsageDescription</key>
+	<string>Feelin Pay necesita enviar notificaciones por SMS a empleados cuando recibas pagos de Yape.</string>
 	
-	<!-- Permisos para notificaciones -->
-	<key>NSUserNotificationsUsageDescription</key>
-	<string>Esta aplicación necesita enviar notificaciones para informar sobre pagos recibidos.</string>
+	<!-- Permisos para notificaciones del sistema (iOS 10+) -->
+	<key>NSUserNotificationCenterUsageDescription</key>
+	<string>Feelin Pay necesita acceso a notificaciones para detectar pagos de Yape automáticamente.</string>
 	
 	<!-- Configuración de red -->
 	<key>NSAppTransportSecurity</key>

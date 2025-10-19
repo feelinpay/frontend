@@ -3,8 +3,9 @@ import 'package:flutter/foundation.dart';
 /// Configuración de la aplicación
 class AppConfig {
   // Configuración del servidor backend
-  // Usar localhost para desarrollo local
-  static const String apiBaseUrl = 'http://localhost:3001/api';
+  // Usar 10.0.2.2 para emulador Android (localhost del host)
+  // Usar localhost para desarrollo web/desktop
+  static const String apiBaseUrl = 'http://10.0.2.2:3001/api';
 
   // Configuración de CORS (para desarrollo)
   static const String corsOrigin = 'http://localhost:3000';

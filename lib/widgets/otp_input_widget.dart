@@ -80,12 +80,16 @@ class _OtpInputWidgetState extends State<OtpInputWidget> {
 
     // Si se ingresó un carácter y no es el último campo, mover al siguiente
     if (text.isNotEmpty && index < widget.length - 1) {
-      _focusNodes[index + 1].requestFocus();
+      Future.microtask(() {
+        _focusNodes[index + 1].requestFocus();
+      });
     }
 
     // Si se borró y no es el primer campo, mover al anterior
     if (text.isEmpty && index > 0) {
-      _focusNodes[index - 1].requestFocus();
+      Future.microtask(() {
+        _focusNodes[index - 1].requestFocus();
+      });
     }
 
     // Notificar cambios
@@ -102,10 +106,26 @@ class _OtpInputWidgetState extends State<OtpInputWidget> {
     if (event is RawKeyDownEvent) {
       if (event.logicalKey == LogicalKeyboardKey.backspace) {
         if (_controllers[index].text.isEmpty && index > 0) {
-          _focusNodes[index - 1].requestFocus();
+          Future.microtask(() {
+            _focusNodes[index - 1].requestFocus();
+          });
         }
       }
     }
+  }
+
+  /// Limpia todos los campos del OTP
+  void clearOtp() {
+    for (int i = 0; i < widget.length; i++) {
+      _controllers[i].clear();
+      _otp[i] = '';
+    }
+    _focusNodes[0].requestFocus();
+  }
+
+  /// Obtiene el OTP actual
+  String getCurrentOtp() {
+    return _otp.join('');
   }
 
   @override

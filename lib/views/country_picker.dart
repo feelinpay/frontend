@@ -39,6 +39,15 @@ class _CountryPickerState extends State<CountryPicker> {
   void initState() {
     super.initState();
     _loadCountries();
+
+    // Si hay un país inicial, seleccionarlo
+    if (widget.initialCountry != null) {
+      final initialCountry = countries.firstWhere(
+        (country) => country.code == widget.initialCountry,
+        orElse: () => countries.first, // Perú por defecto
+      );
+      widget.onCountrySelected(initialCountry);
+    }
   }
 
   void _loadCountries() {

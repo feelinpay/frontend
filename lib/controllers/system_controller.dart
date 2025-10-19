@@ -25,6 +25,9 @@ class SystemController extends ChangeNotifier {
 
   // Verificar conectividad a Internet
   Future<void> checkInternetConnection() async {
+    if (_isCheckingConnectivity)
+      return; // Evitar múltiples verificaciones simultáneas
+
     _setCheckingConnectivity(true);
     _clearError();
 
@@ -36,7 +39,7 @@ class SystemController extends ChangeNotifier {
             Uri.parse('${AppConfig.apiBaseUrl}/health'),
             headers: {'Content-Type': 'application/json'},
           )
-          .timeout(const Duration(seconds: 5));
+          .timeout(const Duration(seconds: 3)); // Reducido timeout
 
       _hasInternetConnection = response.statusCode == 200;
       _connectionType = 'Local Network';
@@ -50,6 +53,7 @@ class SystemController extends ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
+      print('⚠️ [CONNECTIVITY] Error: ${e.toString()}');
       _setError('Error verificando conectividad: ${e.toString()}');
       _hasInternetConnection = false;
       notifyListeners();
@@ -64,10 +68,13 @@ class SystemController extends ChangeNotifier {
     _clearError();
 
     try {
-      final permissions = await PermissionService.checkAndRequestPermissions();
+      final permissions = await PermissionService.requestAllPermissions();
 
-      _hasNotificationPermission = permissions['notifications'] ?? false;
-      _hasSMSPermission = permissions['sms'] ?? false;
+      _hasNotificationPermission =
+          permissions[permission_handler.Permission.notification]?.isGranted ??
+          false;
+      _hasSMSPermission =
+          permissions[permission_handler.Permission.sms]?.isGranted ?? false;
 
       if (!_hasNotificationPermission) {
         _setError('Permisos de notificaciones requeridos');
@@ -126,23 +133,28 @@ class SystemController extends ChangeNotifier {
 
   // Escuchar cambios de conectividad
   void startConnectivityListener() {
-    // Simple connectivity listener - check periodically
-    Timer.periodic(const Duration(seconds: 30), (timer) async {
-      await checkInternetConnection();
+    // Simple connectivity listener - check periodically (reduced frequency)
+    Timer.periodic(const Duration(minutes: 2), (timer) async {
+      if (!_isCheckingConnectivity) {
+        await checkInternetConnection();
+      }
     });
   }
 
   // Verificar permisos específicos
   Future<bool> checkSpecificPermission(String permission) async {
     try {
-      final status = await PermissionService.checkPermissionStatus();
-
       switch (permission) {
         case 'notifications':
-          return status['notifications'] ==
-              permission_handler.PermissionStatus.granted;
+          final status = await PermissionService.checkPermission(
+            permission_handler.Permission.notification,
+          );
+          return status == permission_handler.PermissionStatus.granted;
         case 'sms':
-          return status['sms'] == permission_handler.PermissionStatus.granted;
+          final status = await PermissionService.checkPermission(
+            permission_handler.Permission.sms,
+          );
+          return status == permission_handler.PermissionStatus.granted;
         default:
           return false;
       }

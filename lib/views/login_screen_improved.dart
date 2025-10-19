@@ -318,9 +318,13 @@ class _LoginScreenState extends State<LoginScreen>
     try {
       // Formatear el teléfono con código de país
       String telefonoCompleto = _telefonoController.text.trim();
-      if (_selectedCountry != null) {
-        telefonoCompleto =
-            '${_selectedCountry!.dialCode}${_telefonoController.text.trim()}';
+
+      // Si el teléfono ya tiene código de país, usarlo tal como está
+      if (telefonoCompleto.startsWith('+')) {
+        // Ya tiene código de país
+      } else if (_selectedCountry != null) {
+        // Agregar código de país si no lo tiene
+        telefonoCompleto = '${_selectedCountry!.dialCode}$telefonoCompleto';
       }
 
       final result = await FeelinPayService.register(

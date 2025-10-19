@@ -67,6 +67,71 @@ class FeelinPayService {
     }
   }
 
+  // Verificar OTP genérico (login, password recovery, etc.)
+  static Future<Map<String, dynamic>> verifyOTP(
+    String email,
+    String codigo,
+    String tipo,
+  ) async {
+    try {
+      print('🌐 [SERVICE] Verificando OTP - URL: $baseUrl/auth/verify-otp');
+      print('🌐 [SERVICE] Datos: email=$email, codigo=$codigo, tipo=$tipo');
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/verify-otp'),
+        headers: _headers,
+        body: jsonEncode({
+          'email': email.trim().toLowerCase(),
+          'codigo': codigo,
+          'tipo': tipo,
+        }),
+      );
+
+      print('🌐 [SERVICE] Status Code: ${response.statusCode}');
+      print('🌐 [SERVICE] Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        print('✅ [SERVICE] OTP verificado exitosamente');
+        return {'success': true, 'message': data['message']};
+      } else {
+        final data = jsonDecode(response.body);
+        print('❌ [SERVICE] Error verificando OTP: ${data['message']}');
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Error verificando código',
+        };
+      }
+    } catch (e) {
+      print('❌ [SERVICE] Error de conexión: $e');
+      return {'success': false, 'message': 'Error de conexión: $e'};
+    }
+  }
+
+  // Solicitar recuperación de contraseña
+  static Future<Map<String, dynamic>> forgotPassword(String email) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/forgot-password'),
+        headers: _headers,
+        body: jsonEncode({'email': email.trim().toLowerCase()}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {'success': true, 'message': data['message']};
+      } else {
+        final data = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Error enviando email',
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Error de conexión: $e'};
+    }
+  }
+
   // Verificar OTP de login
   static Future<Map<String, dynamic>> verifyLoginOTP(
     String email,
@@ -143,6 +208,38 @@ class FeelinPayService {
     }
   }
 
+  // Resetear contraseña
+  static Future<Map<String, dynamic>> resetPassword(
+    String email,
+    String otpCode,
+    String newPassword,
+  ) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/reset-password'),
+        headers: _headers,
+        body: jsonEncode({
+          'email': email,
+          'otpCode': otpCode,
+          'newPassword': newPassword,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data;
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Error al resetear contraseña',
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Error de conexión: $e'};
+    }
+  }
+
   // Obtener perfil del usuario desde el backend
   static Future<Map<String, dynamic>> getProfile() async {
     try {
@@ -176,6 +273,7 @@ class FeelinPayService {
     required String email,
     required String telefono,
     required String password,
+    String? codigoPais,
   }) async {
     try {
       final response = await http.post(
@@ -187,6 +285,7 @@ class FeelinPayService {
           'telefono': telefono,
           'password': password,
           'confirmPassword': password, // Confirmar la misma contraseña
+          if (codigoPais != null) 'codigoPais': codigoPais,
         }),
       );
 
@@ -294,7 +393,24 @@ class FeelinPayService {
       } else {
         print('❌ [FLUTTER] Error en login, código: ${response.statusCode}');
         print('❌ [FLUTTER] Respuesta: ${response.body}');
-        // Si falla online, intentar offline
+
+        // Manejar errores específicos del backend
+        final data = jsonDecode(response.body);
+        final errorMessage = data['message'] ?? 'Error al iniciar sesión';
+
+        print('🔍 [FLUTTER] Error message del backend: $errorMessage');
+        print('🔍 [FLUTTER] Status code: ${response.statusCode}');
+
+        // Si es error de credenciales, no intentar offline
+        if (response.statusCode == 401 || response.statusCode == 400) {
+          print(
+            '🔍 [FLUTTER] Devolviendo error de credenciales: $errorMessage',
+          );
+          return {'success': false, 'error': errorMessage};
+        }
+
+        print('🔍 [FLUTTER] Intentando login offline...');
+        // Solo intentar offline si es error de servidor o conexión
         return await _loginOffline(email, password);
       }
     } catch (e) {
@@ -313,7 +429,7 @@ class FeelinPayService {
       final user = await LocalDatabase.getUsuarioByEmail(email);
 
       if (user == null) {
-        return {'success': false, 'error': 'Usuario no encontrado offline'};
+        return {'success': false, 'error': 'Usuario no encontrado'};
       }
 
       // Verificar contraseña (simplificado para offline)

@@ -18,85 +18,109 @@ class LoginOTPVerificationScreen extends StatefulWidget {
       _LoginOTPVerificationScreenState();
 }
 
-class _LoginOTPVerificationScreenState
-    extends State<LoginOTPVerificationScreen> {
-  final _formKey = GlobalKey<FormState>();
-  bool _isResending = false;
-  bool _isLoading = false;
+class _LoginOTPVerificationScreenState extends State<LoginOTPVerificationScreen>
+    with TickerProviderStateMixin {
   String _otpCode = '';
+  bool _isLoading = false;
+  String _errorMessage = '';
+  String _successMessage = '';
 
-  void _onOtpChanged(String otp) {
-    setState(() {
-      _otpCode = otp;
-    });
+  // Animation controllers
+  late AnimationController _animationController;
+  late AnimationController _shakeController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+  late Animation<double> _shakeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeAnimations();
+  }
+
+  void _initializeAnimations() {
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+
+    _shakeController = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+    );
+
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+          CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+        );
+
+    _shakeAnimation = Tween<double>(begin: 0, end: 10).animate(
+      CurvedAnimation(parent: _shakeController, curve: Curves.elasticIn),
+    );
+
+    _animationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    _shakeController.dispose();
+    super.dispose();
   }
 
   Future<void> _verifyOTP() async {
     if (_otpCode.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Por favor ingresa el código completo de 6 dígitos'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      _showError('Por favor ingresa el código OTP completo');
       return;
     }
 
     setState(() {
       _isLoading = true;
+      _errorMessage = '';
     });
 
     try {
-      // Usar el servicio correcto según el tipo
-      Map<String, dynamic> result;
-      if (widget.type == 'registration') {
-        result = await FeelinPayService.verifyRegistrationOTP(
-          widget.email,
-          _otpCode,
-        );
-      } else {
-        result = await FeelinPayService.verifyLoginOTP(widget.email, _otpCode);
-      }
+      print('🔐 [OTP VERIFICATION] Verificando OTP para: ${widget.email}');
+      print('🔐 [OTP VERIFICATION] Código: $_otpCode');
+      print('🔐 [OTP VERIFICATION] Tipo: ${widget.type}');
 
-      if (result['success'] == true && mounted) {
-        // OTP verificado exitosamente
-        if (widget.type == 'registration') {
-          // Para registro, volver al login
-          Navigator.pushReplacementNamed(context, '/login');
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Email verificado exitosamente. Ya puedes iniciar sesión.',
-              ),
-              backgroundColor: Colors.green,
-            ),
-          );
-        } else {
-          // Para login, ir al dashboard
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const DashboardScreen()),
-          );
-        }
+      final result = await FeelinPayService.verifyOTP(
+        widget.email,
+        _otpCode,
+        widget.type,
+      );
+
+      print('🔐 [OTP VERIFICATION] Resultado: $result');
+
+      if (result['success']) {
+        print(
+          '✅ [OTP VERIFICATION] Verificación exitosa, navegando al dashboard...',
+        );
+        setState(() {
+          _successMessage = widget.type == 'registration'
+              ? 'Cuenta verificada exitosamente'
+              : 'Verificación exitosa';
+        });
+
+        // Navegar al dashboard después de un breve delay
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const DashboardScreen()),
+            );
+          }
+        });
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result['message'] ?? 'Error verificando código'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        print('❌ [OTP VERIFICATION] Error: ${result['message']}');
+        _showError(result['message'] ?? 'Código OTP inválido');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error de conexión: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      _showError('Error de conexión: $e');
     } finally {
       setState(() {
         _isLoading = false;
@@ -106,39 +130,39 @@ class _LoginOTPVerificationScreenState
 
   Future<void> _resendOTP() async {
     setState(() {
-      _isResending = true;
+      _isLoading = true;
+      _errorMessage = '';
     });
 
     try {
-      // Usar el servicio correcto según el tipo
-      if (widget.type == 'registration') {
-        await FeelinPayService.resendOTP(widget.email, 'EMAIL_VERIFICATION');
-      } else {
-        await FeelinPayService.resendOTP(widget.email, 'LOGIN_VERIFICATION');
-      }
+      final result = await FeelinPayService.resendOTP(
+        widget.email,
+        widget.type,
+      );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Código OTP reenviado exitosamente'),
-            backgroundColor: Colors.green,
-          ),
-        );
+      if (result['success']) {
+        setState(() {
+          _successMessage = 'Código OTP reenviado exitosamente';
+        });
+      } else {
+        _showError(result['message'] ?? 'Error al reenviar OTP');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error reenviando código: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      _showError('Error de conexión: $e');
     } finally {
       setState(() {
-        _isResending = false;
+        _isLoading = false;
       });
     }
+  }
+
+  void _showError(String message) {
+    setState(() {
+      _errorMessage = message;
+    });
+    _shakeController.forward().then((_) {
+      _shakeController.reverse();
+    });
   }
 
   @override
@@ -146,139 +170,189 @@ class _LoginOTPVerificationScreenState
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
+        title: Text(
+          'Verificación ${widget.type == 'registration' ? 'de Registro' : 'de Login'}',
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
-        ),
+        foregroundColor: Colors.black87,
       ),
-      body: SafeArea(
-        child: Center(
+      body: FadeTransition(
+        opacity: _fadeAnimation,
+        child: SlideTransition(
+          position: _slideAnimation,
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Icono
-                  Container(
-                    width: 80,
-                    height: 80,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 20),
+
+                // Icon
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: Colors.grey[200],
+                      color: Colors.blue[50],
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
-                      Icons.email_outlined,
-                      size: 40,
-                      color: Colors.grey,
+                    child: Icon(
+                      Icons.verified_user,
+                      size: 60,
+                      color: Colors.blue[600],
                     ),
                   ),
+                ),
 
-                  const SizedBox(height: 32),
+                const SizedBox(height: 30),
 
-                  // Título
-                  const Text(
-                    'Verifica tu identidad',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1F2937),
-                    ),
-                    textAlign: TextAlign.center,
+                // Title
+                Text(
+                  'Verificación OTP',
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
                   ),
+                  textAlign: TextAlign.center,
+                ),
 
-                  const SizedBox(height: 16),
+                const SizedBox(height: 10),
 
-                  // Mensaje
-                  Text(
-                    'Hemos enviado un código de 6 dígitos a ${widget.email}',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Color(0xFF6B7280),
-                    ),
-                    textAlign: TextAlign.center,
+                // Subtitle
+                Text(
+                  'Ingresa el código de 6 dígitos enviado a\n${widget.email}',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                    height: 1.5,
                   ),
+                  textAlign: TextAlign.center,
+                ),
 
-                  const SizedBox(height: 32),
+                const SizedBox(height: 40),
 
-                  // OTP Input Widget
-                  OtpInputWidget(
-                    onChanged: _onOtpChanged,
-                    onCompleted: (otp) {
-                      _onOtpChanged(otp);
-                      _verifyOTP();
+                // OTP Input
+                OtpInputWidget(
+                  onChanged: (value) {
+                    setState(() {
+                      _otpCode = value;
+                    });
+                  },
+                  onCompleted: (value) {
+                    setState(() {
+                      _otpCode = value;
+                    });
+                  },
+                ),
+
+                const SizedBox(height: 30),
+
+                // Error message
+                if (_errorMessage.isNotEmpty)
+                  AnimatedBuilder(
+                    animation: _shakeAnimation,
+                    builder: (context, child) {
+                      return Transform.translate(
+                        offset: Offset(_shakeAnimation.value, 0),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.red[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.red[200]!),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.error,
+                                color: Colors.red[600],
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _errorMessage,
+                                  style: TextStyle(color: Colors.red[600]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
                     },
                   ),
 
-                  const SizedBox(height: 32),
-
-                  // Botón verificar
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _verifyOTP,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF667EEA),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                // Success message
+                if (_successMessage.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green[200]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.check_circle,
+                          color: Colors.green[600],
+                          size: 20,
                         ),
-                        elevation: 0,
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
-                                ),
-                              ),
-                            )
-                          : const Text(
-                              'Verificar Código',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _successMessage,
+                            style: TextStyle(color: Colors.green[600]),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                const SizedBox(height: 30),
 
-                  // Botón reenviar
-                  TextButton(
-                    onPressed: _isResending ? null : _resendOTP,
-                    child: _isResending
-                        ? const Text('Reenviando...')
-                        : const Text('Reenviar código'),
+                // Verify button
+                ElevatedButton(
+                  onPressed: _isLoading ? null : _verifyOTP,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[600],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                      : const Text(
+                          'Verificar Código',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                ),
 
-                  const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-                  // Información adicional
-                  Text(
-                    'No recibiste el código? Revisa tu carpeta de spam o reenvía el código.',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                    textAlign: TextAlign.center,
-                  ),
+                // Resend button
+                TextButton(
+                  onPressed: _isLoading ? null : _resendOTP,
+                  child: const Text('Reenviar Código OTP'),
+                ),
 
-                  const SizedBox(height: 4),
-
-                  // Información de expiración
-                  Text(
-                    'El código expira en 10 minutos',
-                    style: TextStyle(fontSize: 11, color: Colors.orange[600]),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
+                const SizedBox(height: 20),
+              ],
             ),
           ),
         ),

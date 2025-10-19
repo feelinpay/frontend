@@ -9,17 +9,17 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 
-class YapeNotificationPlugin : FlutterPlugin, MethodCallHandler {
+class PaymentNotificationPlugin : FlutterPlugin, MethodCallHandler {
     private lateinit var channel: MethodChannel
     private lateinit var context: Context
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-        channel = MethodChannel(flutterPluginBinding.binaryMessenger, "yape_notifications")
+        channel = MethodChannel(flutterPluginBinding.binaryMessenger, "payment_notifications")
         channel.setMethodCallHandler(this)
         context = flutterPluginBinding.applicationContext
         
         // Configurar el listener de notificaciones
-        YapeNotificationListener.setMethodChannel(channel)
+        PaymentNotificationListener.setMethodChannel(channel)
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
@@ -54,7 +54,7 @@ class YapeNotificationPlugin : FlutterPlugin, MethodCallHandler {
             }
             
             // Iniciar servicio de escucha
-            val intent = Intent(context, YapeNotificationListener::class.java)
+            val intent = Intent(context, PaymentNotificationListener::class.java)
             context.startService(intent)
             
             result.success(true)
@@ -82,7 +82,7 @@ class YapeNotificationPlugin : FlutterPlugin, MethodCallHandler {
 
     private fun startListening(result: Result) {
         try {
-            val intent = Intent(context, YapeNotificationListener::class.java)
+            val intent = Intent(context, PaymentNotificationListener::class.java)
             context.startService(intent)
             result.success(true)
         } catch (e: Exception) {
@@ -92,7 +92,7 @@ class YapeNotificationPlugin : FlutterPlugin, MethodCallHandler {
 
     private fun stopListening(result: Result) {
         try {
-            val intent = Intent(context, YapeNotificationListener::class.java)
+            val intent = Intent(context, PaymentNotificationListener::class.java)
             context.stopService(intent)
             result.success(true)
         } catch (e: Exception) {
