@@ -660,14 +660,28 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   void _changePassword() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Cambiando contraseña...')),
+    showDialog(
+      context: context,
+      builder: (context) => _ChangePasswordDialog(
+        onPasswordChanged: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Contraseña cambiada exitosamente')),
+          );
+        },
+      ),
     );
   }
 
   void _changeEmail() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Cambiando correo electrónico...')),
+    showDialog(
+      context: context,
+      builder: (context) => _ChangeEmailDialog(
+        onEmailChanged: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Correo electrónico cambiado exitosamente')),
+          );
+        },
+      ),
     );
   }
 
@@ -898,5 +912,574 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
         ),
       ],
     );
+  }
+}
+
+class _ChangePasswordDialog extends StatefulWidget {
+  final VoidCallback onPasswordChanged;
+
+  const _ChangePasswordDialog({required this.onPasswordChanged});
+
+  @override
+  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
+}
+
+class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _currentPasswordController = TextEditingController();
+  final _newPasswordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  bool _isLoading = false;
+  bool _obscureCurrentPassword = true;
+  bool _obscureNewPassword = true;
+  bool _obscureConfirmPassword = true;
+
+  @override
+  void dispose() {
+    _currentPasswordController.dispose();
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(DesignSystem.radiusL),
+      ),
+      title: const Text('Cambiar Contraseña'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _currentPasswordController,
+              obscureText: _obscureCurrentPassword,
+              decoration: InputDecoration(
+                labelText: 'Contraseña actual',
+                hintText: 'Ingresa tu contraseña actual',
+                prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscureCurrentPassword ? Icons.visibility : Icons.visibility_off,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _obscureCurrentPassword = !_obscureCurrentPassword;
+                    });
+                  },
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                ),
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'La contraseña actual es requerida';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: DesignSystem.spacingM),
+            TextFormField(
+              controller: _newPasswordController,
+              obscureText: _obscureNewPassword,
+              decoration: InputDecoration(
+                labelText: 'Nueva contraseña',
+                hintText: 'Ingresa tu nueva contraseña',
+                prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscureNewPassword ? Icons.visibility : Icons.visibility_off,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _obscureNewPassword = !_obscureNewPassword;
+                    });
+                  },
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                ),
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'La nueva contraseña es requerida';
+                }
+                if (value.length < 6) {
+                  return 'La contraseña debe tener al menos 6 caracteres';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: DesignSystem.spacingM),
+            TextFormField(
+              controller: _confirmPasswordController,
+              obscureText: _obscureConfirmPassword,
+              decoration: InputDecoration(
+                labelText: 'Confirmar nueva contraseña',
+                hintText: 'Confirma tu nueva contraseña',
+                prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscureConfirmPassword ? Icons.visibility : Icons.visibility_off,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _obscureConfirmPassword = !_obscureConfirmPassword;
+                    });
+                  },
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                ),
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'La confirmación de contraseña es requerida';
+                }
+                if (value != _newPasswordController.text) {
+                  return 'Las contraseñas no coinciden';
+                }
+                return null;
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isLoading ? null : () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        ElevatedButton(
+          onPressed: _isLoading ? null : _changePassword,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: DesignSystem.primaryColor,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+            ),
+          ),
+          child: _isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : const Text('Cambiar Contraseña'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _changePassword() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final authController = Provider.of<AuthController>(context, listen: false);
+      
+      final success = await authController.changePassword(
+        currentPassword: _currentPasswordController.text,
+        newPassword: _newPasswordController.text,
+        confirmPassword: _confirmPasswordController.text,
+      );
+
+      if (success) {
+        widget.onPasswordChanged();
+        Navigator.pop(context);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(authController.error ?? 'Error cambiando contraseña'),
+            backgroundColor: DesignSystem.errorColor,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: DesignSystem.errorColor,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+}
+
+class _ChangeEmailDialog extends StatefulWidget {
+  final VoidCallback onEmailChanged;
+
+  const _ChangeEmailDialog({required this.onEmailChanged});
+
+  @override
+  State<_ChangeEmailDialog> createState() => _ChangeEmailDialogState();
+}
+
+class _ChangeEmailDialogState extends State<_ChangeEmailDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _otpController = TextEditingController();
+  bool _isLoading = false;
+  bool _isOtpSent = false;
+  bool _isOtpVerified = false;
+  String? _pendingEmail;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _otpController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(DesignSystem.radiusL),
+      ),
+      title: const Text('Cambiar Correo Electrónico'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!_isOtpSent) ...[
+              TextFormField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  labelText: 'Nuevo correo electrónico',
+                  hintText: 'Ingresa tu nuevo correo',
+                  prefixIcon: const Icon(Icons.email_outlined),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                  ),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'El correo electrónico es requerido';
+                  }
+                  if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                    return 'Ingresa un correo electrónico válido';
+                  }
+                  return null;
+                },
+              ),
+            ] else if (!_isOtpVerified) ...[
+              Container(
+                padding: const EdgeInsets.all(DesignSystem.spacingM),
+                decoration: BoxDecoration(
+                  color: DesignSystem.primaryColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                  border: Border.all(color: DesignSystem.primaryColor.withOpacity(0.3)),
+                ),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.email_outlined,
+                      color: DesignSystem.primaryColor,
+                      size: 32,
+                    ),
+                    const SizedBox(height: DesignSystem.spacingS),
+                    Text(
+                      'Código enviado',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: DesignSystem.primaryColor,
+                      ),
+                    ),
+                    const SizedBox(height: DesignSystem.spacingXS),
+                    Text(
+                      'Hemos enviado un código de verificación a:',
+                      style: TextStyle(
+                        color: DesignSystem.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                    Text(
+                      _pendingEmail ?? '',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: DesignSystem.textPrimary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: DesignSystem.spacingM),
+              TextFormField(
+                controller: _otpController,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                decoration: InputDecoration(
+                  labelText: 'Código de verificación',
+                  hintText: 'Ingresa el código de 6 dígitos',
+                  prefixIcon: const Icon(Icons.security_outlined),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                  ),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'El código es requerido';
+                  }
+                  if (value.length != 6) {
+                    return 'El código debe tener 6 dígitos';
+                  }
+                  return null;
+                },
+              ),
+            ] else ...[
+              Container(
+                padding: const EdgeInsets.all(DesignSystem.spacingM),
+                decoration: BoxDecoration(
+                  color: DesignSystem.successColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                  border: Border.all(color: DesignSystem.successColor.withOpacity(0.3)),
+                ),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.check_circle_outline,
+                      color: DesignSystem.successColor,
+                      size: 32,
+                    ),
+                    const SizedBox(height: DesignSystem.spacingS),
+                    Text(
+                      'Código verificado',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: DesignSystem.successColor,
+                      ),
+                    ),
+                    const SizedBox(height: DesignSystem.spacingXS),
+                    Text(
+                      'Tu correo electrónico ha sido actualizado exitosamente',
+                      style: TextStyle(
+                        color: DesignSystem.textSecondary,
+                        fontSize: 12,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        if (!_isOtpVerified) ...[
+          TextButton(
+            onPressed: _isLoading ? null : () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          if (!_isOtpSent) ...[
+            ElevatedButton(
+              onPressed: _isLoading ? null : _requestEmailChange,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: DesignSystem.primaryColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                ),
+              ),
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Text('Enviar Código'),
+            ),
+          ] else ...[
+            TextButton(
+              onPressed: _isLoading ? null : _resendOtp,
+              child: const Text('Reenviar Código'),
+            ),
+            ElevatedButton(
+              onPressed: _isLoading ? null : _verifyOtp,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: DesignSystem.primaryColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                ),
+              ),
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Text('Verificar'),
+            ),
+          ],
+        ] else ...[
+          ElevatedButton(
+            onPressed: () {
+              widget.onEmailChanged();
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: DesignSystem.successColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+              ),
+            ),
+            child: const Text('Continuar'),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _requestEmailChange() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final authController = Provider.of<AuthController>(context, listen: false);
+      
+      final success = await authController.requestEmailChange(_emailController.text);
+
+      if (success) {
+        setState(() {
+          _pendingEmail = _emailController.text;
+          _isOtpSent = true;
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(authController.error ?? 'Error enviando código de verificación'),
+            backgroundColor: DesignSystem.errorColor,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: DesignSystem.errorColor,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _verifyOtp() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final authController = Provider.of<AuthController>(context, listen: false);
+      
+      final success = await authController.confirmEmailChange(
+        newEmail: _pendingEmail!,
+        codigo: _otpController.text,
+      );
+
+      if (success) {
+        setState(() {
+          _isOtpVerified = true;
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(authController.error ?? 'Error verificando código'),
+            backgroundColor: DesignSystem.errorColor,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: DesignSystem.errorColor,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _resendOtp() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final authController = Provider.of<AuthController>(context, listen: false);
+      
+      final success = await authController.requestEmailChange(_pendingEmail!);
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Código reenviado exitosamente'),
+            backgroundColor: DesignSystem.successColor,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(authController.error ?? 'Error reenviando código'),
+            backgroundColor: DesignSystem.errorColor,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: DesignSystem.errorColor,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 }

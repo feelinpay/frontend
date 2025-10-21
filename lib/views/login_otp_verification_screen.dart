@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/feelin_pay_service.dart';
+import '../controllers/auth_controller.dart';
 import '../widgets/otp_input_widget.dart';
-import 'dashboard_improved.dart';
 
 class LoginOTPVerificationScreen extends StatefulWidget {
   final String email;
@@ -78,6 +79,7 @@ class _LoginOTPVerificationScreenState extends State<LoginOTPVerificationScreen>
       return;
     }
 
+    final authController = Provider.of<AuthController>(context, listen: false);
     setState(() {
       _isLoading = true;
       _errorMessage = '';
@@ -88,18 +90,18 @@ class _LoginOTPVerificationScreenState extends State<LoginOTPVerificationScreen>
       print('🔐 [OTP VERIFICATION] Código: $_otpCode');
       print('🔐 [OTP VERIFICATION] Tipo: ${widget.type}');
 
-      final result = await FeelinPayService.verifyOTP(
-        widget.email,
-        _otpCode,
-        widget.type,
-      );
+      bool success;
+      if (widget.type == 'registration') {
+        success = await authController.verifyRegistrationOtp(email: widget.email, codigo: _otpCode);
+      } else {
+        success = await authController.verifyLoginOtp(email: widget.email, codigo: _otpCode);
+      }
 
-      print('🔐 [OTP VERIFICATION] Resultado: $result');
+      print('🔐 [OTP VERIFICATION] Resultado: $success');
+      print('🔐 [OTP VERIFICATION] Error: ${authController.error}');
 
-      if (result['success']) {
-        print(
-          '✅ [OTP VERIFICATION] Verificación exitosa, navegando al dashboard...',
-        );
+      if (success) {
+        print('✅ [OTP VERIFICATION] Verificación exitosa, navegando al dashboard...');
         setState(() {
           _successMessage = widget.type == 'registration'
               ? 'Cuenta verificada exitosamente'
@@ -109,15 +111,12 @@ class _LoginOTPVerificationScreenState extends State<LoginOTPVerificationScreen>
         // Navegar al dashboard después de un breve delay
         Future.delayed(const Duration(seconds: 1), () {
           if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const DashboardScreen()),
-            );
+            Navigator.pushReplacementNamed(context, '/dashboard');
           }
         });
       } else {
-        print('❌ [OTP VERIFICATION] Error: ${result['message']}');
-        _showError(result['message'] ?? 'Código OTP inválido');
+        print('❌ [OTP VERIFICATION] Error: ${authController.error}');
+        _showError(authController.error ?? 'Código OTP inválido');
       }
     } catch (e) {
       _showError('Error de conexión: $e');
@@ -135,6 +134,7 @@ class _LoginOTPVerificationScreenState extends State<LoginOTPVerificationScreen>
     });
 
     try {
+      // Para reenvío de OTP, usamos el servicio directo por ahora
       final result = await FeelinPayService.resendOTP(
         widget.email,
         widget.type,

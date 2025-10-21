@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:form_validator/form_validator.dart';
-import '../services/feelin_pay_service.dart';
+import 'package:provider/provider.dart';
+import '../controllers/auth_controller.dart';
 import 'country_picker.dart';
 import 'password_recovery_screen.dart';
 
@@ -233,27 +234,23 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final authController = Provider.of<AuthController>(context, listen: false);
     setState(() => _isLoading = true);
 
     try {
-      final result = await FeelinPayService.login(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
+      final success = await authController.login(
+        _emailController.text.trim(),
+        _passwordController.text,
       );
 
-      print('🔍 [LOGIN SCREEN] Resultado del login: $result');
-      print('🔍 [LOGIN SCREEN] Tipo de resultado: ${result.runtimeType}');
-      print('🔍 [LOGIN SCREEN] Claves disponibles: ${result.keys.toList()}');
+      print('🔍 [LOGIN SCREEN] Login resultado: $success');
+      print('🔍 [LOGIN SCREEN] Error: ${authController.error}');
+      print('🔍 [LOGIN SCREEN] Usuario actual: ${authController.currentUser}');
 
-      if (result['success'] == true) {
-        print('🔍 [LOGIN SCREEN] Login exitoso, verificando OTP...');
-        print('🔍 [LOGIN SCREEN] requiresOTP: ${result['requiresOTP']}');
-        print(
-          '🔍 [LOGIN SCREEN] requiresOTP tipo: ${result['requiresOTP'].runtimeType}',
-        );
-
-        if (result['requiresOTP'] == true) {
-          print('🔍 [LOGIN SCREEN] Redirigiendo a verificación OTP...');
+      if (success) {
+        // Verificar si requiere OTP
+        if (authController.requiresOTP) {
+          print('🔍 [LOGIN SCREEN] Requiere OTP, redirigiendo a verificación...');
           if (mounted) {
             Navigator.pushReplacementNamed(
               context,
@@ -265,21 +262,31 @@ class _LoginScreenState extends State<LoginScreen>
             );
           }
         } else {
-          print('🔍 [LOGIN SCREEN] Redirigiendo al dashboard...');
+          print('🔍 [LOGIN SCREEN] Login exitoso, redirigiendo al dashboard...');
           if (mounted) {
-            print('🔍 [LOGIN SCREEN] Context mounted, navegando...');
-            Navigator.pushReplacementNamed(
-              context,
-              '/dashboard',
-            );
-            print('🔍 [LOGIN SCREEN] Navegación ejecutada');
+            Navigator.pushReplacementNamed(context, '/dashboard');
           }
         }
       } else {
+        // Si requiere OTP, el mensaje estará en authController.error
+        if (authController.error != null && authController.error!.contains('OTP')) {
+          print('🔍 [LOGIN SCREEN] Requiere OTP, redirigiendo...');
+          if (mounted) {
+            Navigator.pushReplacementNamed(
+              context,
+              '/otp-verification',
+              arguments: {
+                'email': _emailController.text.trim(),
+                'type': 'login',
+              },
+            );
+          }
+        } else {
+          // Mostrar error
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(result['error'] ?? 'Error al iniciar sesión'),
+                content: Text(authController.error ?? 'Error al iniciar sesión'),
               backgroundColor: Colors.red,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
@@ -287,6 +294,7 @@ class _LoginScreenState extends State<LoginScreen>
               ),
             ),
           );
+          }
         }
       }
     } catch (e) {
@@ -312,6 +320,7 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final authController = Provider.of<AuthController>(context, listen: false);
     setState(() => _isLoading = true);
 
     try {
@@ -326,22 +335,20 @@ class _LoginScreenState extends State<LoginScreen>
         telefonoCompleto = '${_selectedCountry!.dialCode}$telefonoCompleto';
       }
 
-      final result = await FeelinPayService.register(
+      final success = await authController.register(
         nombre: _nombreController.text.trim(),
         telefono: telefonoCompleto,
         email: _emailController.text.trim(),
         password: _passwordController.text,
+        confirmPassword: _passwordController.text,
       );
 
-      print('🔍 [REGISTER] Resultado del registro: $result');
-      print('🔍 [REGISTER] success: ${result['success']}');
-      print('🔍 [REGISTER] message: ${result['message']}');
-      print('🔍 [REGISTER] mounted: $mounted');
+      print('🔍 [REGISTER] Registro resultado: $success');
+      print('🔍 [REGISTER] Error: ${authController.error}');
 
-      if (result['success'] == true) {
+      if (success) {
         print('🔍 [REGISTER] Navegando a OTP verification...');
         if (mounted) {
-          // Navegar a la pantalla de verificación OTP
           Navigator.pushNamed(
             context,
             '/otp-verification',
@@ -350,15 +357,12 @@ class _LoginScreenState extends State<LoginScreen>
               'type': 'registration',
             },
           );
-          print('🔍 [REGISTER] Navegación ejecutada');
         }
       } else {
-        print('🔍 [REGISTER] Mostrando error: ${result['message']}');
         if (mounted) {
-          print('🔍 [REGISTER] Context mounted, mostrando SnackBar...');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(result['message'] ?? 'Error al registrarse'),
+              content: Text(authController.error ?? 'Error al registrarse'),
               backgroundColor: Colors.red,
               behavior: SnackBarBehavior.floating,
               duration: const Duration(seconds: 4),
@@ -366,11 +370,6 @@ class _LoginScreenState extends State<LoginScreen>
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-          );
-          print('🔍 [REGISTER] SnackBar mostrado');
-        } else {
-          print(
-            '🔍 [REGISTER] Context no mounted, no se puede mostrar SnackBar',
           );
         }
       }

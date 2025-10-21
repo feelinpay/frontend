@@ -43,7 +43,7 @@ class FeelinPayService {
   ) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/verify-registration-otp'),
+        Uri.parse('$baseUrl/public/auth/verify-registration-otp'),
         headers: _headers,
         body: jsonEncode({
           'email': email.trim().toLowerCase(),
@@ -74,11 +74,11 @@ class FeelinPayService {
     String tipo,
   ) async {
     try {
-      print('🌐 [SERVICE] Verificando OTP - URL: $baseUrl/auth/verify-otp');
+      print('🌐 [SERVICE] Verificando OTP - URL: $baseUrl/public/auth/verify-otp');
       print('🌐 [SERVICE] Datos: email=$email, codigo=$codigo, tipo=$tipo');
 
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/verify-otp'),
+        Uri.parse('$baseUrl/public/auth/verify-otp'),
         headers: _headers,
         body: jsonEncode({
           'email': email.trim().toLowerCase(),
@@ -112,7 +112,7 @@ class FeelinPayService {
   static Future<Map<String, dynamic>> forgotPassword(String email) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/forgot-password'),
+        Uri.parse('$baseUrl/public/auth/forgot-password'),
         headers: _headers,
         body: jsonEncode({'email': email.trim().toLowerCase()}),
       );
@@ -139,7 +139,7 @@ class FeelinPayService {
   ) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/verify-login-otp'),
+        Uri.parse('$baseUrl/public/auth/verify-login-otp'),
         headers: _headers,
         body: jsonEncode({
           'email': email.trim().toLowerCase(),
@@ -188,7 +188,7 @@ class FeelinPayService {
   ) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/resend-otp'),
+        Uri.parse('$baseUrl/public/auth/resend-otp'),
         headers: _headers,
         body: jsonEncode({'email': email.trim().toLowerCase(), 'tipo': tipo}),
       );
@@ -216,7 +216,7 @@ class FeelinPayService {
   ) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/reset-password'),
+        Uri.parse('$baseUrl/public/auth/reset-password'),
         headers: _headers,
         body: jsonEncode({
           'email': email,
@@ -246,7 +246,7 @@ class FeelinPayService {
       final headers = await _authHeaders;
 
       final response = await http.get(
-        Uri.parse('$baseUrl/auth/profile'),
+        Uri.parse('$baseUrl/owner/profile'),
         headers: headers,
       );
 
@@ -277,7 +277,7 @@ class FeelinPayService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/register'),
+        Uri.parse('$baseUrl/public/auth/register'),
         headers: _headers,
         body: jsonEncode({
           'nombre': nombre,
@@ -343,11 +343,11 @@ class FeelinPayService {
   }) async {
     try {
       print('🔐 [FLUTTER] Iniciando login para: $email');
-      print('🌐 [FLUTTER] URL: $baseUrl/auth/login');
+      print('🌐 [FLUTTER] URL: $baseUrl/public/auth/login');
 
       // Intentar login online primero
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/login'),
+        Uri.parse('$baseUrl/public/auth/login'),
         headers: _headers,
         body: jsonEncode({'email': email, 'password': password}),
       );
@@ -989,7 +989,7 @@ class FeelinPayService {
       final emailLimpio = email.trim().toLowerCase();
 
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/resend-otp'),
+        Uri.parse('$baseUrl/public/auth/resend-otp'),
         headers: _headers,
         body: jsonEncode({'email': emailLimpio, 'tipo': 'EMAIL_VERIFICATION'}),
       );
@@ -1022,7 +1022,7 @@ class FeelinPayService {
       final emailLimpio = email.trim().toLowerCase();
 
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/forgot-password'),
+        Uri.parse('$baseUrl/public/auth/forgot-password'),
         headers: _headers,
         body: jsonEncode({'email': emailLimpio}),
       );
@@ -1068,7 +1068,7 @@ class FeelinPayService {
       print('🔍 [FeelinPayService] Request body: $requestBody');
 
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/reset-password'),
+        Uri.parse('$baseUrl/public/auth/reset-password'),
         headers: _headers,
         body: jsonEncode(requestBody),
       );

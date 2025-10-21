@@ -116,6 +116,7 @@ class _PhoneFieldWidgetState extends State<PhoneFieldWidget> {
     );
   }
 
+  /// Obtener el número de teléfono completo con código de país
   String getFullPhoneNumber() {
     String phoneNumber = widget.controller.text.trim();
     

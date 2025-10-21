@@ -37,12 +37,14 @@ dependencies:
   
   # HTTP client para conectar con el backend
   http: ^1.1.0
+  dio: ^5.4.0
   
   # Para manejo de JSON
   json_annotation: ^4.8.1
   
   # Para almacenamiento local seguro
   shared_preferences: ^2.2.2
+  flutter_secure_storage: ^9.0.0
   
   # Para encriptación
   crypto: ^3.0.3

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/design/design_system.dart';
 import '../widgets/three_dots_menu_widget.dart';
-import '../widgets/phone_field_widget.dart';
 import '../controllers/auth_controller.dart';
+import '../services/employee_service.dart';
+import '../models/employee_model.dart';
+import '../views/country_picker.dart';
 import 'package:provider/provider.dart';
 
 class EmployeeManagementScreen extends StatefulWidget {
@@ -15,8 +17,9 @@ class EmployeeManagementScreen extends StatefulWidget {
 
 class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
     with TickerProviderStateMixin {
-  List<Employee> _employees = [];
-  List<Employee> _filteredEmployees = [];
+  final EmployeeService _employeeService = EmployeeService();
+  List<EmployeeModel> _employees = [];
+  List<EmployeeModel> _filteredEmployees = [];
   bool _isLoading = false;
   bool _notificationsEnabled = true;
   AnimationController? _animationController;
@@ -26,6 +29,19 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
   void initState() {
     super.initState();
     _initializeAnimations();
+    _checkAuthAndLoadEmployees();
+  }
+
+  Future<void> _checkAuthAndLoadEmployees() async {
+    final authController = Provider.of<AuthController>(context, listen: false);
+    
+    // Verificar si el usuario está autenticado y verificado
+    if (!authController.isAuthenticated || !authController.isVerified) {
+      // Si no está autenticado o verificado, no cargar empleados
+      return;
+    }
+    
+    // Si está autenticado y verificado, cargar empleados
     _loadEmployees();
   }
 
@@ -40,65 +56,35 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
     _animationController!.forward();
   }
 
-  void _loadEmployees() {
+  Future<void> _loadEmployees() async {
     setState(() {
       _isLoading = true;
     });
 
-    // Simular carga de empleados
-    Future.delayed(const Duration(seconds: 1), () {
-      setState(() {
-        _employees = [
-          Employee(
-            id: '1',
-            name: 'Juan Pérez',
-            phone: '+51 987654321',
-            notificationsEnabled: true,
-          ),
-          Employee(
-            id: '2',
-            name: 'María García',
-            phone: '+51 945786512',
-            notificationsEnabled: true,
-          ),
-          Employee(
-            id: '3',
-            name: 'Carlos López',
-            phone: '+51 948567153',
-            notificationsEnabled: false,
-          ),
-          Employee(
-            id: '4',
-            name: 'Ana Martínez',
-            phone: '+51 987654321',
-            notificationsEnabled: true,
-          ),
-          Employee(
-            id: '5',
-            name: 'Luis Rodríguez',
-            phone: '+51 912345678',
-            notificationsEnabled: true,
-          ),
-          Employee(
-            id: '6',
-            name: 'Sofia Hernández',
-            phone: '+51 945123678',
-            notificationsEnabled: false,
-          ),
-          Employee(
-            id: '7',
-            name: 'Diego Torres',
-            phone: '+51 978945612',
-            notificationsEnabled: true,
-          ),
-        ];
-        _filteredEmployees = _employees;
-        _isLoading = false;
-        
-        // Actualizar el estado del toggle basado en los empleados reales
+    try {
+      final response = await _employeeService.getEmployees();
+      
+      if (response.isSuccess && response.data != null) {
+        setState(() {
+          _employees = response.data!;
+          _filteredEmployees = _employees;
+          _isLoading = false;
+        });
         _updateNotificationsToggleState();
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+        
+        _showErrorSnackBar(response.message);
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
       });
-    });
+      
+      _showErrorSnackBar('Error al cargar empleados: $e');
+    }
   }
 
   void _filterEmployees(String query) {
@@ -108,38 +94,126 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
       } else {
         _filteredEmployees = _employees
             .where((employee) =>
-                employee.name.toLowerCase().contains(query.toLowerCase()) ||
-                employee.phone.contains(query))
+                employee.nombre.toLowerCase().contains(query.toLowerCase()) ||
+                employee.telefono.contains(query))
             .toList();
       }
     });
   }
 
-  void _toggleAllNotifications() {
-    setState(() {
+  Future<void> _toggleAllNotifications() async {
+    try {
       // Obtener el estado actual basado en todos los empleados
-      bool allEnabled = _employees.every((employee) => employee.notificationsEnabled);
+      final bool allEnabled = _employees.every((employee) => employee.activo);
       
       // Si todos están activados, desactivar todos; si no, activar todos
-      bool newState = !allEnabled;
+      final bool newState = !allEnabled;
       
-      for (var employee in _employees) {
-        employee.notificationsEnabled = newState;
+      // Guardar estado anterior para posible reversión
+      final List<EmployeeModel> previousState = List.from(_employees);
+      
+      // ACTUALIZACIÓN OPTIMISTA: Actualizar UI inmediatamente
+      setState(() {
+        _employees = _employees.map((employee) => 
+          employee.copyWith(activo: newState)
+        ).toList();
+        _filteredEmployees = _employees;
+        _notificationsEnabled = newState;
+      });
+      
+      // Mostrar mensaje inmediatamente con indicador de sincronización
+      _showSuccessSnackBar(
+        newState ? 'Activando notificaciones...' : 'Desactivando notificaciones...'
+      );
+      
+      // Sincronizar con el backend en segundo plano
+      _syncNotificationsWithBackend(newState, previousState);
+      
+    } catch (e) {
+      _showErrorSnackBar('Error: $e');
+    }
+  }
+
+  /// Sincroniza las notificaciones con el backend en segundo plano
+  Future<void> _syncNotificationsWithBackend(bool newState, List<EmployeeModel> previousState) async {
+    try {
+      final response = await _employeeService.toggleAllNotifications(newState);
+
+      if (response.isSuccess) {
+        // Confirmar que la sincronización fue exitosa
+        if (mounted) {
+          _showSuccessSnackBar(
+            newState ? '✅ Notificaciones activadas para todos' : '✅ Notificaciones desactivadas para todos'
+          );
+        }
+      } else {
+        // Revertir al estado anterior si falló la sincronización
+        if (mounted) {
+          setState(() {
+            _employees = previousState;
+            _filteredEmployees = _employees;
+            _updateNotificationsToggleState();
+          });
+          
+          _showErrorSnackBar('❌ Error sincronizando: ${response.message}');
+        }
       }
-      
-      _notificationsEnabled = newState;
-    });
+    } catch (e) {
+      // Revertir al estado anterior si falló la sincronización
+      if (mounted) {
+        setState(() {
+          _employees = previousState;
+          _filteredEmployees = _employees;
+          _updateNotificationsToggleState();
+        });
+        
+        _showErrorSnackBar('❌ Error de conexión: $e');
+      }
+    }
   }
 
 
-  void _addEmployee() {
+  void _addEmployee() async {
+    final result = await showDialog<EmployeeModel>(
+      context: context,
+      builder: (context) => _AddEmployeeDialog(),
+    );
+
+    if (result != null) {
+      try {
+        final response = await _employeeService.createEmployee(
+          nombre: result.nombre,
+          telefono: result.telefono,
+        );
+
+        if (response.isSuccess && response.data != null) {
+          setState(() {
+            _employees.add(response.data!);
+            _filteredEmployees = _employees;
+            _updateNotificationsToggleState();
+          });
+          
+          _showSuccessSnackBar('Empleado ${result.nombre} agregado exitosamente');
+        } else {
+          _showErrorSnackBar(response.message);
+        }
+      } catch (e) {
+        _showErrorSnackBar('Error: $e');
+      }
+    }
+  }
+
+  void _editEmployee(EmployeeModel employee) {
     showDialog(
       context: context,
-      builder: (context) => _AddEmployeeDialog(
-        onEmployeeAdded: (employee) {
+      builder: (context) => _EditEmployeeDialog(
+        employee: employee,
+        onEmployeeUpdated: (updatedEmployee) {
           setState(() {
-            _employees.add(employee);
-            _filteredEmployees = _employees;
+            final index = _employees.indexWhere((emp) => emp.id == employee.id);
+            if (index != -1) {
+              _employees[index] = updatedEmployee;
+            }
             _updateNotificationsToggleState();
           });
         },
@@ -147,31 +221,37 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
     );
   }
 
-  void _editEmployee(Employee employee) {
-    // TODO: Implementar edición de empleado
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Editando ${employee.name}')),
-    );
-  }
-
-  void _deleteEmployee(Employee employee) {
+  void _deleteEmployee(EmployeeModel employee) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Eliminar Empleado'),
-        content: Text('¿Estás seguro de que deseas eliminar a ${employee.name}?'),
+        content: Text('¿Estás seguro de que deseas eliminar a ${employee.nombre}?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _employees.removeWhere((e) => e.id == employee.id);
-                _filteredEmployees = _employees;
-                _updateNotificationsToggleState();
-              });
+            onPressed: () async {
+              try {
+                final response = await _employeeService.deleteEmployee(employee.id);
+                
+                if (response.isSuccess) {
+                  setState(() {
+                    _employees.removeWhere((e) => e.id == employee.id);
+                    _filteredEmployees = _employees;
+                    _updateNotificationsToggleState();
+                  });
+                  
+                  _showSuccessSnackBar('Empleado ${employee.nombre} eliminado exitosamente');
+                } else {
+                  _showErrorSnackBar(response.message);
+                }
+              } catch (e) {
+                _showErrorSnackBar('Error: $e');
+              }
+              
               Navigator.pop(context);
             },
             style: ElevatedButton.styleFrom(
@@ -184,11 +264,80 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
     );
   }
 
-  void _toggleEmployeeNotifications(Employee employee) {
-    setState(() {
-      employee.notificationsEnabled = !employee.notificationsEnabled;
-      _updateNotificationsToggleState();
-    });
+  Future<void> _toggleEmployeeNotifications(EmployeeModel employee) async {
+    try {
+      final bool newState = !employee.activo;
+      final int employeeIndex = _employees.indexWhere((emp) => emp.id == employee.id);
+      
+      if (employeeIndex == -1) return;
+      
+      // Guardar estado anterior para posible reversión
+      final bool previousState = employee.activo;
+      
+      // ACTUALIZACIÓN OPTIMISTA: Actualizar UI inmediatamente
+      setState(() {
+        _employees[employeeIndex] = _employees[employeeIndex].copyWith(activo: newState);
+        _filteredEmployees = _employees;
+        _updateNotificationsToggleState();
+      });
+      
+      // Mostrar mensaje inmediatamente
+      _showSuccessSnackBar(
+        '${employee.nombre}: ${newState ? 'activando...' : 'desactivando...'}'
+      );
+      
+      // Sincronizar con el backend en segundo plano
+      _syncIndividualNotificationWithBackend(employee, newState, previousState, employeeIndex);
+      
+    } catch (e) {
+      _showErrorSnackBar('Error: $e');
+    }
+  }
+
+  /// Sincroniza la notificación individual con el backend en segundo plano
+  Future<void> _syncIndividualNotificationWithBackend(
+    EmployeeModel employee, 
+    bool newState, 
+    bool previousState, 
+    int employeeIndex
+  ) async {
+    try {
+      final response = await _employeeService.updateNotificationConfig(
+        employeeId: employee.id,
+        notificacionesActivas: newState,
+      );
+
+      if (response.isSuccess) {
+        // Confirmar que la sincronización fue exitosa
+        if (mounted) {
+          _showSuccessSnackBar(
+            '✅ ${employee.nombre}: ${newState ? 'activado' : 'desactivado'}'
+          );
+        }
+      } else {
+        // Revertir al estado anterior si falló la sincronización
+        if (mounted) {
+          setState(() {
+            _employees[employeeIndex] = _employees[employeeIndex].copyWith(activo: previousState);
+            _filteredEmployees = _employees;
+            _updateNotificationsToggleState();
+          });
+          
+          _showErrorSnackBar('❌ Error sincronizando ${employee.nombre}: ${response.message}');
+        }
+      }
+    } catch (e) {
+      // Revertir al estado anterior si falló la sincronización
+      if (mounted) {
+        setState(() {
+          _employees[employeeIndex] = _employees[employeeIndex].copyWith(activo: previousState);
+          _filteredEmployees = _employees;
+          _updateNotificationsToggleState();
+        });
+        
+        _showErrorSnackBar('❌ Error de conexión ${employee.nombre}: $e');
+      }
+    }
   }
 
   void _updateNotificationsToggleState() {
@@ -196,8 +345,69 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
     if (_employees.isEmpty) {
       _notificationsEnabled = false;
     } else {
-      _notificationsEnabled = _employees.every((employee) => employee.notificationsEnabled);
+      _notificationsEnabled = _employees.every((employee) => employee.activo);
     }
+  }
+
+  // Métodos auxiliares para mostrar mensajes
+  void _showSuccessSnackBar(String message) {
+    if (!mounted) return;
+    _showCustomToast(message, DesignSystem.bottomNavColor, 2); // Color oscuro para éxito
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    _showCustomToast(message, DesignSystem.errorColor, 3); // Mantener rojo para errores
+  }
+
+  void _showCustomToast(String message, Color color, int duration) {
+    if (!mounted) return;
+    
+    final overlay = Overlay.of(context);
+    late OverlayEntry overlayEntry;
+    
+    overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        bottom: 100, // Espacio suficiente para no tapar el botón +
+        left: 20,
+        right: 80, // Reducir el ancho para no tapar el botón de navegación
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(6),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      ),
+    );
+    
+    overlay.insert(overlayEntry);
+    
+    // Remover el overlay después del tiempo especificado
+    Future.delayed(Duration(seconds: duration), () {
+      if (overlayEntry.mounted) {
+        overlayEntry.remove();
+      }
+    });
   }
 
   void _showSettingsDialog() {
@@ -390,7 +600,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
           Switch(
             value: _notificationsEnabled,
             onChanged: (value) => _toggleAllNotifications(),
-            activeColor: DesignSystem.primaryColor,
+            activeThumbColor: DesignSystem.primaryColor,
           ),
         ],
       ),
@@ -464,7 +674,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
     );
   }
 
-  Widget _buildEmployeeItem(Employee employee) {
+  Widget _buildEmployeeItem(EmployeeModel employee) {
     return Container(
       margin: const EdgeInsets.only(bottom: DesignSystem.spacingS),
       decoration: BoxDecoration(
@@ -482,7 +692,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
         leading: CircleAvatar(
           backgroundColor: DesignSystem.primaryColor.withOpacity(0.1),
           child: Text(
-            employee.name[0].toUpperCase(),
+            employee.nombre[0].toUpperCase(),
             style: const TextStyle(
               color: DesignSystem.primaryColor,
               fontWeight: FontWeight.bold,
@@ -490,14 +700,14 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
           ),
         ),
         title: Text(
-          employee.name,
+          employee.nombre,
           style: const TextStyle(
             fontWeight: FontWeight.w600,
             color: DesignSystem.textPrimary,
           ),
         ),
         subtitle: Text(
-          employee.phone,
+          employee.telefono,
           style: const TextStyle(color: DesignSystem.textSecondary),
         ),
         trailing: Row(
@@ -506,10 +716,10 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
             IconButton(
               onPressed: () => _toggleEmployeeNotifications(employee),
               icon: Icon(
-                employee.notificationsEnabled
+                employee.activo
                     ? Icons.notifications
                     : Icons.notifications_off,
-                color: employee.notificationsEnabled
+                color: employee.activo
                     ? DesignSystem.primaryColor
                     : DesignSystem.textTertiary,
               ),
@@ -555,24 +765,9 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
   }
 }
 
-class Employee {
-  final String id;
-  final String name;
-  final String phone;
-  bool notificationsEnabled;
-
-  Employee({
-    required this.id,
-    required this.name,
-    required this.phone,
-    required this.notificationsEnabled,
-  });
-}
 
 class _AddEmployeeDialog extends StatefulWidget {
-  final Function(Employee) onEmployeeAdded;
-
-  const _AddEmployeeDialog({required this.onEmployeeAdded});
+  const _AddEmployeeDialog();
 
   @override
   State<_AddEmployeeDialog> createState() => _AddEmployeeDialogState();
@@ -582,12 +777,41 @@ class _AddEmployeeDialogState extends State<_AddEmployeeDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
+  Country _selectedCountry = Country(
+    name: 'Perú',
+    code: 'PE',
+    dialCode: '+51',
+    flag: '🇵🇪',
+  );
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
     super.dispose();
+  }
+
+  void _showCountryPicker() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.8,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: CountryPicker(
+          onCountrySelected: (country) {
+            setState(() {
+              _selectedCountry = country;
+            });
+            Navigator.pop(context);
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -616,16 +840,70 @@ class _AddEmployeeDialogState extends State<_AddEmployeeDialog> {
               },
             ),
             const SizedBox(height: DesignSystem.spacingM),
-            PhoneFieldWidget(
-              controller: _phoneController,
-              labelText: 'Teléfono',
-              hintText: 'Número de teléfono',
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'El teléfono es requerido';
-                }
-                return null;
-              },
+            Row(
+              children: [
+                // Selector de país
+                GestureDetector(
+                  onTap: _showCountryPicker,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: DesignSystem.spacingM,
+                      vertical: DesignSystem.spacingM,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: DesignSystem.textTertiary.withOpacity(0.3)),
+                      borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _selectedCountry.flag,
+                          style: const TextStyle(fontSize: 20),
+                        ),
+                        const SizedBox(width: DesignSystem.spacingS),
+                        Text(
+                          _selectedCountry.dialCode,
+                          style: const TextStyle(
+                            color: DesignSystem.textPrimary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(width: DesignSystem.spacingS),
+                        const Icon(
+                          Icons.arrow_drop_down,
+                          color: DesignSystem.textSecondary,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: DesignSystem.spacingS),
+                // Campo de teléfono
+                Expanded(
+                  child: TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(15),
+                    ],
+                    decoration: InputDecoration(
+                      labelText: 'Teléfono',
+                      hintText: 'Número de teléfono',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'El teléfono es requerido';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -638,17 +916,280 @@ class _AddEmployeeDialogState extends State<_AddEmployeeDialog> {
         ElevatedButton(
           onPressed: () {
             if (_formKey.currentState!.validate()) {
-              final employee = Employee(
+              final employee = EmployeeModel(
                 id: DateTime.now().millisecondsSinceEpoch.toString(),
-                name: _nameController.text,
-                phone: _phoneController.text,
-                notificationsEnabled: true,
+                usuarioId: '', // Se asignará en el backend
+                nombre: _nameController.text,
+                telefono: '${_selectedCountry.dialCode}${_phoneController.text}', // Usar número completo con código de país
+                activo: true,
+                createdAt: DateTime.now(),
+                updatedAt: DateTime.now(),
               );
-              widget.onEmployeeAdded(employee);
-              Navigator.pop(context);
+              Navigator.pop(context, employee); // Retornar el empleado
             }
           },
           child: const Text('Agregar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _EditEmployeeDialog extends StatefulWidget {
+  final EmployeeModel employee;
+  final Function(EmployeeModel) onEmployeeUpdated;
+
+  const _EditEmployeeDialog({
+    required this.employee,
+    required this.onEmployeeUpdated,
+  });
+
+  @override
+  State<_EditEmployeeDialog> createState() => _EditEmployeeDialogState();
+}
+
+class _EditEmployeeDialogState extends State<_EditEmployeeDialog> {
+  late TextEditingController _nameController;
+  late TextEditingController _phoneController;
+  late GlobalKey<FormState> _formKey;
+  late Country _selectedCountry;
+  final EmployeeService _employeeService = EmployeeService();
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.employee.nombre);
+    
+    // Extraer código de país del teléfono
+    final phoneNumber = widget.employee.telefono;
+    _selectedCountry = _getCountryFromPhone(phoneNumber);
+    _phoneController = TextEditingController(text: _getPhoneWithoutCountryCode(phoneNumber));
+    
+    _formKey = GlobalKey<FormState>();
+  }
+
+  Country _getCountryFromPhone(String phone) {
+    // Por defecto Perú, pero se puede mejorar la lógica
+    return Country(
+      name: 'Peru',
+      code: 'PE',
+      dialCode: '+51',
+      flag: '🇵🇪',
+    );
+  }
+
+  String _getPhoneWithoutCountryCode(String phone) {
+    // Remover el código de país del número
+    if (phone.startsWith('+51')) {
+      return phone.substring(3);
+    }
+    return phone;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(DesignSystem.radiusL),
+      ),
+      title: const Text('Editar Empleado'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _nameController,
+              decoration: InputDecoration(
+                labelText: 'Nombre',
+                hintText: 'Nombre del empleado',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: DesignSystem.surfaceColor,
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: DesignSystem.spacingM,
+                  horizontal: DesignSystem.spacingM,
+                ),
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'El nombre es requerido';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: DesignSystem.spacingM),
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: GestureDetector(
+                    onTap: () async {
+                      final country = await showDialog<Country>(
+                        context: context,
+                        builder: (context) => CountryPicker(
+                          onCountrySelected: (country) => Navigator.pop(context, country),
+                        ),
+                      );
+                      if (country != null) {
+                        setState(() {
+                          _selectedCountry = country;
+                        });
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: DesignSystem.spacingM,
+                        horizontal: DesignSystem.spacingM,
+                      ),
+                      decoration: BoxDecoration(
+                        color: DesignSystem.surfaceColor,
+                        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _selectedCountry.flag,
+                            style: const TextStyle(fontSize: 20),
+                          ),
+                          const SizedBox(width: DesignSystem.spacingS),
+                          Text(
+                            _selectedCountry.dialCode,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w500,
+                              color: DesignSystem.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(width: DesignSystem.spacingS),
+                          const Icon(
+                            Icons.arrow_drop_down,
+                            color: DesignSystem.textSecondary,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: DesignSystem.spacingS),
+                Expanded(
+                  flex: 3,
+                  child: TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      labelText: 'Teléfono',
+                      hintText: 'Número de teléfono',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: DesignSystem.surfaceColor,
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: DesignSystem.spacingM,
+                        horizontal: DesignSystem.spacingM,
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'El teléfono es requerido';
+                      }
+                      if (value.length < 9) {
+                        return 'El teléfono debe tener al menos 9 dígitos';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        ElevatedButton(
+          onPressed: () async {
+            if (_formKey.currentState!.validate()) {
+              try {
+                final updatedEmployee = widget.employee.copyWith(
+                  nombre: _nameController.text,
+                  telefono: '${_selectedCountry.dialCode}${_phoneController.text}',
+                );
+
+                final response = await _employeeService.updateEmployee(
+                  employeeId: widget.employee.id,
+                  nombre: _nameController.text,
+                  telefono: '${_selectedCountry.dialCode}${_phoneController.text}',
+                );
+
+                if (response.isSuccess) {
+                  widget.onEmployeeUpdated(updatedEmployee);
+                  Navigator.pop(context);
+                  
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('${updatedEmployee.nombre} actualizado'),
+                        backgroundColor: DesignSystem.primaryColor,
+                        behavior: SnackBarBehavior.floating,
+                        duration: const Duration(seconds: 2),
+                        margin: const EdgeInsets.only(bottom: 80, left: 16, right: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    );
+                  }
+                } else {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(response.message),
+                        backgroundColor: DesignSystem.errorColor,
+                        behavior: SnackBarBehavior.floating,
+                        duration: const Duration(seconds: 3),
+                        margin: const EdgeInsets.only(bottom: 80, left: 16, right: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    );
+                  }
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: $e'),
+                      backgroundColor: DesignSystem.errorColor,
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 3),
+                      margin: const EdgeInsets.only(bottom: 80, left: 16, right: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  );
+                }
+              }
+            }
+          },
+          child: const Text('Guardar'),
         ),
       ],
     );

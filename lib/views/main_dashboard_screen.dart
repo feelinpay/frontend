@@ -6,7 +6,6 @@ import '../models/user_model.dart';
 import 'package:provider/provider.dart';
 import 'employee_management_screen.dart';
 import 'profile_screen.dart';
-import 'enhanced_user_management_screen.dart';
 import 'business_management_screen.dart';
 import 'super_admin_dashboard.dart';
 
@@ -118,12 +117,10 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
 
   List<Widget> _getPages(bool isSuperAdmin) {
     if (isSuperAdmin) {
-      // Para Super Administradores: Dashboard administrativo + gestión completa
+      // Para Super Administradores: Perfil, Inicio (Dashboard), Negocios
       return [
         const ProfileScreen(),
         const SuperAdminDashboard(),
-        const EmployeeManagementScreen(),
-        const UserManagementScreen(),
         const BusinessManagementScreen(),
       ];
     } else {

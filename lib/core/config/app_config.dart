@@ -8,7 +8,7 @@ class AppConfig {
   static const String apiBaseUrl = 'http://localhost:3001/api';
 
   // Configuración de CORS (para desarrollo)
-  static const String corsOrigin = 'http://localhost:3000';
+  static const String corsOrigin = 'http://localhost:3001';
 
   // Configuración de timeout
   static const Duration requestTimeout = Duration(seconds: 30);
@@ -53,6 +53,8 @@ class AppConfig {
   static const String userManagementEndpoint = '/user-management';
   static const String systemEndpoint = '/system';
   static const String profileEndpoint = '/profile';
+  static const String ownerEndpoint = '/owner';
+  static const String superAdminEndpoint = '/super-admin';
   static const String dashboardEndpoint = '/dashboard';
   static const String otpEndpoint = '/otp';
   static const String paymentsEndpoint = '/payments';

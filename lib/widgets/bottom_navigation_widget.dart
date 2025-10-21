@@ -39,7 +39,7 @@ class BottomNavigationWidget extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: isSuperAdmin ? [
-          // Super Admin: Perfil, Dashboard, Empleados, Usuarios, Negocios
+          // Super Admin: Perfil, Inicio (Dashboard), Propietarios
           _buildNavItem(
             context: context,
             icon: Icons.person_outline,
@@ -49,31 +49,17 @@ class BottomNavigationWidget extends StatelessWidget {
           ),
           _buildNavItem(
             context: context,
-            icon: Icons.dashboard_outlined,
-            label: 'Dashboard',
+            icon: Icons.home_outlined,
+            label: 'Inicio',
             index: 1,
             isActive: currentIndex == 1,
           ),
           _buildNavItem(
             context: context,
             icon: Icons.people_outline,
-            label: 'Empleados',
+            label: 'Propietarios',
             index: 2,
             isActive: currentIndex == 2,
-          ),
-          _buildNavItem(
-            context: context,
-            icon: Icons.admin_panel_settings_outlined,
-            label: 'Usuarios',
-            index: 3,
-            isActive: currentIndex == 3,
-          ),
-          _buildNavItem(
-            context: context,
-            icon: Icons.business_outlined,
-            label: 'Negocios',
-            index: 4,
-            isActive: currentIndex == 4,
           ),
         ] : [
           // Propietario: Solo Perfil y Empleados

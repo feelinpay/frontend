@@ -17,6 +17,7 @@ import 'controllers/system_controller.dart';
 import 'services/payment_notification_service.dart';
 import 'services/sms_service.dart';
 import 'services/background_service.dart';
+import 'services/api_service.dart';
 import 'database/local_database.dart';
 import 'core/design/design_system.dart';
 
@@ -40,6 +41,12 @@ void main() async {
 
   // Inicializar base de datos local
   await LocalDatabase.database;
+
+  // Inicializar servicio API
+  await ApiService().initialize();
+
+  // Inicializar controlador de autenticación
+  await _authController.initialize();
 
   // Iniciar servicios
   await PaymentNotificationService.startListening();
