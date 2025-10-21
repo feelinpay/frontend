@@ -31,7 +31,6 @@ class SnackBarHelper {
         backgroundColor: DesignSystem.successColor,
         duration: const Duration(seconds: 3),
         behavior: SnackBarBehavior.fixed,
-        margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(DesignSystem.radiusM),
         ),
@@ -67,7 +66,6 @@ class SnackBarHelper {
         backgroundColor: DesignSystem.errorColor,
         duration: const Duration(seconds: 4),
         behavior: SnackBarBehavior.fixed,
-        margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(DesignSystem.radiusM),
         ),
@@ -103,7 +101,6 @@ class SnackBarHelper {
         backgroundColor: DesignSystem.primaryColor,
         duration: const Duration(seconds: 3),
         behavior: SnackBarBehavior.fixed,
-        margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(DesignSystem.radiusM),
         ),
@@ -139,7 +136,6 @@ class SnackBarHelper {
         backgroundColor: DesignSystem.warningColor,
         duration: const Duration(seconds: 3),
         behavior: SnackBarBehavior.fixed,
-        margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(DesignSystem.radiusM),
         ),
@@ -178,7 +174,6 @@ class SnackBarHelper {
         backgroundColor: DesignSystem.primaryColor,
         duration: const Duration(seconds: 5),
         behavior: SnackBarBehavior.fixed,
-        margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(DesignSystem.radiusM),
         ),
