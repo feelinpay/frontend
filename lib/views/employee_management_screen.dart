@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/design/design_system.dart';
 import '../widgets/three_dots_menu_widget.dart';
+import '../widgets/snackbar_helper.dart';
 import '../controllers/auth_controller.dart';
 import '../services/employee_service.dart';
 import '../models/employee_model.dart';
+import '../utils/error_helper.dart';
 import '../views/country_picker.dart';
 import 'package:provider/provider.dart';
 
@@ -76,14 +78,14 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
           _isLoading = false;
         });
         
-        _showErrorSnackBar(response.message);
+        SnackBarHelper.showError(context, ErrorHelper.processApiError(response));
       }
     } catch (e) {
       setState(() {
         _isLoading = false;
       });
       
-      _showErrorSnackBar('Error al cargar empleados: $e');
+      SnackBarHelper.showError(context, 'Error al cargar empleados: $e');
     }
   }
 
@@ -108,7 +110,8 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
       final bool newState = !allEnabled;
       
       // Mostrar indicador de carga y bloquear navegación
-      _showLoadingSnackBar(
+      SnackBarHelper.showLoading(
+        context,
         newState ? 'Activando notificaciones para todos...' : 'Desactivando notificaciones para todos...'
       );
       
@@ -125,14 +128,15 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
           _notificationsEnabled = newState;
         });
         
-        _showSuccessSnackBar(
-          newState ? '✅ Notificaciones activadas para todos' : '✅ Notificaciones desactivadas para todos'
+        SnackBarHelper.showSuccess(
+          context,
+          newState ? 'Notificaciones activadas para todos' : 'Notificaciones desactivadas para todos'
         );
       } else {
-        _showErrorSnackBar('❌ Error: ${response.message}');
+        SnackBarHelper.showError(context, 'Error: ${response.message}');
       }
     } catch (e) {
-      _showErrorSnackBar('❌ Error de conexión: ${e.toString()}');
+      SnackBarHelper.showError(context, 'Error de conexión: ${e.toString()}');
     }
   }
 
@@ -156,12 +160,12 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
             _updateNotificationsToggleState();
           });
           
-          _showSuccessSnackBar('Empleado ${result.nombre} agregado exitosamente');
+          SnackBarHelper.showSuccess(context, 'Empleado ${result.nombre} agregado exitosamente');
         } else {
-          _showErrorSnackBar(response.message);
+          SnackBarHelper.showError(context, ErrorHelper.processApiError(response));
         }
       } catch (e) {
-        _showErrorSnackBar('Error: $e');
+        SnackBarHelper.showError(context, 'Error: $e');
       }
     }
   }
@@ -207,12 +211,12 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
                     _updateNotificationsToggleState();
                   });
                   
-                  _showSuccessSnackBar('Empleado ${employee.nombre} eliminado exitosamente');
+                  SnackBarHelper.showSuccess(context, 'Empleado ${employee.nombre} eliminado exitosamente');
                 } else {
-                  _showErrorSnackBar(response.message);
+                  SnackBarHelper.showError(context, ErrorHelper.processApiError(response));
                 }
               } catch (e) {
-                _showErrorSnackBar('Error: $e');
+                SnackBarHelper.showError(context, 'Error: $e');
               }
               
               Navigator.pop(context);
@@ -235,7 +239,8 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
       if (employeeIndex == -1) return;
       
       // Mostrar indicador de carga y bloquear navegación
-      _showLoadingSnackBar(
+      SnackBarHelper.showLoading(
+        context,
         '${employee.nombre}: ${newState ? 'Activando notificaciones...' : 'Desactivando notificaciones...'}'
       );
       
@@ -253,14 +258,15 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
           _updateNotificationsToggleState();
         });
         
-        _showSuccessSnackBar(
-          '✅ ${employee.nombre}: ${newState ? 'Notificaciones activadas' : 'Notificaciones desactivadas'}'
+        SnackBarHelper.showSuccess(
+          context,
+          '${employee.nombre}: ${newState ? 'Notificaciones activadas' : 'Notificaciones desactivadas'}'
         );
       } else {
-        _showErrorSnackBar('❌ Error: ${response.message}');
+        SnackBarHelper.showError(context, 'Error: ${response.message}');
       }
     } catch (e) {
-      _showErrorSnackBar('❌ Error de conexión: ${e.toString()}');
+      SnackBarHelper.showError(context, 'Error de conexión: ${e.toString()}');
     }
   }
 
@@ -274,71 +280,6 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
     }
   }
 
-  // Métodos auxiliares para mostrar mensajes
-  void _showSuccessSnackBar(String message) {
-    if (!mounted) return;
-    _showCustomToast(message, DesignSystem.bottomNavColor, 2); // Color oscuro para éxito
-  }
-
-  void _showErrorSnackBar(String message) {
-    if (!mounted) return;
-    _showCustomToast(message, DesignSystem.errorColor, 3); // Mantener rojo para errores
-  }
-
-  void _showLoadingSnackBar(String message) {
-    if (!mounted) return;
-    _showCustomToast(message, DesignSystem.warningColor, 5); // CHECKME: Usar warningColor para loading
-  }
-
-  void _showCustomToast(String message, Color color, int duration) {
-    if (!mounted) return;
-    
-    final overlay = Overlay.of(context);
-    late OverlayEntry overlayEntry;
-    
-    overlayEntry = OverlayEntry(
-      builder: (context) => Positioned(
-        bottom: 100, // Espacio suficiente para no tapar el botón +
-        left: 20,
-        right: 80, // Reducir el ancho para no tapar el botón de navegación
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(6),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Text(
-              message,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ),
-      ),
-    );
-    
-    overlay.insert(overlayEntry);
-    
-    // Remover el overlay después del tiempo especificado
-    Future.delayed(Duration(seconds: duration), () {
-      if (overlayEntry.mounted) {
-        overlayEntry.remove();
-      }
-    });
-  }
 
   void _showSettingsDialog() {
     showDialog(

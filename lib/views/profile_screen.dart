@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/design/design_system.dart';
 import '../controllers/auth_controller.dart';
 import '../widgets/phone_field_widget.dart';
+import '../widgets/snackbar_helper.dart';
 import 'package:provider/provider.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -645,18 +646,14 @@ class _ProfileScreenState extends State<ProfileScreen>
         user: Provider.of<AuthController>(context, listen: false).currentUser,
         onSave: (updatedUser) {
           // Aquí se actualizaría el usuario en el backend
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Perfil actualizado exitosamente')),
-          );
+          SnackBarHelper.showSuccess(context, 'Perfil actualizado exitosamente');
         },
       ),
     );
   }
 
   void _showNotificationSettings() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Abriendo configuración de notificaciones...')),
-    );
+    SnackBarHelper.showInfo(context, 'Abriendo configuración de notificaciones...');
   }
 
   void _changePassword() {
@@ -664,9 +661,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       context: context,
       builder: (context) => _ChangePasswordDialog(
         onPasswordChanged: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Contraseña cambiada exitosamente')),
-          );
+          SnackBarHelper.showSuccess(context, 'Contraseña cambiada exitosamente');
         },
       ),
     );
@@ -677,18 +672,14 @@ class _ProfileScreenState extends State<ProfileScreen>
       context: context,
       builder: (context) => _ChangeEmailDialog(
         onEmailChanged: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Correo electrónico cambiado exitosamente')),
-          );
+          SnackBarHelper.showSuccess(context, 'Correo electrónico cambiado exitosamente');
         },
       ),
     );
   }
 
   void _showSecuritySettings() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Abriendo configuración de seguridad...')),
-    );
+    SnackBarHelper.showInfo(context, 'Abriendo configuración de seguridad...');
   }
 
 
@@ -1100,7 +1091,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(authController.error ?? 'Error cambiando contraseña'),
+            content: Text(authController.error ?? 'Error al cambiar la contraseña'),
             backgroundColor: DesignSystem.errorColor,
           ),
         );
@@ -1378,7 +1369,7 @@ class _ChangeEmailDialogState extends State<_ChangeEmailDialog> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(authController.error ?? 'Error enviando código de verificación'),
+            content: Text(authController.error ?? 'Error al enviar el código de verificación'),
             backgroundColor: DesignSystem.errorColor,
           ),
         );
@@ -1421,7 +1412,7 @@ class _ChangeEmailDialogState extends State<_ChangeEmailDialog> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(authController.error ?? 'Error verificando código'),
+            content: Text(authController.error ?? 'Error al verificar el código'),
             backgroundColor: DesignSystem.errorColor,
           ),
         );
@@ -1462,7 +1453,7 @@ class _ChangeEmailDialogState extends State<_ChangeEmailDialog> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(authController.error ?? 'Error reenviando código'),
+            content: Text(authController.error ?? 'Error al reenviar el código'),
             backgroundColor: DesignSystem.errorColor,
           ),
         );
