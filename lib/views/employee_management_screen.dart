@@ -105,73 +105,36 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
     try {
       // Obtener el estado actual basado en todos los empleados
       final bool allEnabled = _employees.every((employee) => employee.activo);
-      
-      // Si todos están activados, desactivar todos; si no, activar todos
       final bool newState = !allEnabled;
       
-      // Guardar estado anterior para posible reversión
-      final List<EmployeeModel> previousState = List.from(_employees);
-      
-      // ACTUALIZACIÓN OPTIMISTA: Actualizar UI inmediatamente
-      setState(() {
-        _employees = _employees.map((employee) => 
-          employee.copyWith(activo: newState)
-        ).toList();
-        _filteredEmployees = _employees;
-        _notificationsEnabled = newState;
-      });
-      
-      // Mostrar mensaje inmediatamente con indicador de sincronización
-      _showSuccessSnackBar(
-        newState ? 'Activando notificaciones...' : 'Desactivando notificaciones...'
+      // Mostrar indicador de carga y bloquear navegación
+      _showLoadingSnackBar(
+        newState ? 'Activando notificaciones para todos...' : 'Desactivando notificaciones para todos...'
       );
       
-      // Sincronizar con el backend en segundo plano
-      _syncNotificationsWithBackend(newState, previousState);
-      
-    } catch (e) {
-      _showErrorSnackBar('Error: $e');
-    }
-  }
-
-  /// Sincroniza las notificaciones con el backend en segundo plano
-  Future<void> _syncNotificationsWithBackend(bool newState, List<EmployeeModel> previousState) async {
-    try {
+      // Realizar la operación en el backend
       final response = await _employeeService.toggleAllNotifications(newState);
 
       if (response.isSuccess) {
-        // Confirmar que la sincronización fue exitosa
-        if (mounted) {
-          _showSuccessSnackBar(
-            newState ? '✅ Notificaciones activadas para todos' : '✅ Notificaciones desactivadas para todos'
-          );
-        }
-      } else {
-        // Revertir al estado anterior si falló la sincronización
-        if (mounted) {
-          setState(() {
-            _employees = previousState;
-            _filteredEmployees = _employees;
-            _updateNotificationsToggleState();
-          });
-          
-          _showErrorSnackBar('❌ Error sincronizando: ${response.message}');
-        }
-      }
-    } catch (e) {
-      // Revertir al estado anterior si falló la sincronización
-      if (mounted) {
+        // Actualizar UI solo después del éxito
         setState(() {
-          _employees = previousState;
+          _employees = _employees.map((employee) => 
+            employee.copyWith(activo: newState)
+          ).toList();
           _filteredEmployees = _employees;
-          _updateNotificationsToggleState();
+          _notificationsEnabled = newState;
         });
         
-        _showErrorSnackBar('❌ Error de conexión: $e');
+        _showSuccessSnackBar(
+          newState ? '✅ Notificaciones activadas para todos' : '✅ Notificaciones desactivadas para todos'
+        );
+      } else {
+        _showErrorSnackBar('❌ Error: ${response.message}');
       }
+    } catch (e) {
+      _showErrorSnackBar('❌ Error de conexión: ${e.toString()}');
     }
   }
-
 
   void _addEmployee() async {
     final result = await showDialog<EmployeeModel>(
@@ -271,74 +234,36 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
       
       if (employeeIndex == -1) return;
       
-      // Guardar estado anterior para posible reversión
-      final bool previousState = employee.activo;
-      
-      // ACTUALIZACIÓN OPTIMISTA: Actualizar UI inmediatamente
-      setState(() {
-        _employees[employeeIndex] = _employees[employeeIndex].copyWith(activo: newState);
-        _filteredEmployees = _employees;
-        _updateNotificationsToggleState();
-      });
-      
-      // Mostrar mensaje inmediatamente
-      _showSuccessSnackBar(
-        '${employee.nombre}: ${newState ? 'activando...' : 'desactivando...'}'
+      // Mostrar indicador de carga y bloquear navegación
+      _showLoadingSnackBar(
+        '${employee.nombre}: ${newState ? 'Activando notificaciones...' : 'Desactivando notificaciones...'}'
       );
       
-      // Sincronizar con el backend en segundo plano
-      _syncIndividualNotificationWithBackend(employee, newState, previousState, employeeIndex);
-      
-    } catch (e) {
-      _showErrorSnackBar('Error: $e');
-    }
-  }
-
-  /// Sincroniza la notificación individual con el backend en segundo plano
-  Future<void> _syncIndividualNotificationWithBackend(
-    EmployeeModel employee, 
-    bool newState, 
-    bool previousState, 
-    int employeeIndex
-  ) async {
-    try {
+      // Realizar la operación en el backend
       final response = await _employeeService.updateNotificationConfig(
         employeeId: employee.id,
         notificacionesActivas: newState,
       );
 
       if (response.isSuccess) {
-        // Confirmar que la sincronización fue exitosa
-        if (mounted) {
-          _showSuccessSnackBar(
-            '✅ ${employee.nombre}: ${newState ? 'activado' : 'desactivado'}'
-          );
-        }
-      } else {
-        // Revertir al estado anterior si falló la sincronización
-        if (mounted) {
-          setState(() {
-            _employees[employeeIndex] = _employees[employeeIndex].copyWith(activo: previousState);
-            _filteredEmployees = _employees;
-            _updateNotificationsToggleState();
-          });
-          
-          _showErrorSnackBar('❌ Error sincronizando ${employee.nombre}: ${response.message}');
-        }
-      }
-    } catch (e) {
-      // Revertir al estado anterior si falló la sincronización
-      if (mounted) {
+        // Actualizar UI solo después del éxito
         setState(() {
-          _employees[employeeIndex] = _employees[employeeIndex].copyWith(activo: previousState);
+          _employees[employeeIndex] = _employees[employeeIndex].copyWith(activo: newState);
           _filteredEmployees = _employees;
           _updateNotificationsToggleState();
         });
         
-        _showErrorSnackBar('❌ Error de conexión ${employee.nombre}: $e');
+        _showSuccessSnackBar(
+          '✅ ${employee.nombre}: ${newState ? 'Notificaciones activadas' : 'Notificaciones desactivadas'}'
+        );
+      } else {
+        _showErrorSnackBar('❌ Error: ${response.message}');
       }
+    } catch (e) {
+      _showErrorSnackBar('❌ Error de conexión: ${e.toString()}');
     }
   }
+
 
   void _updateNotificationsToggleState() {
     // Verificar si todos los empleados tienen notificaciones activadas
@@ -358,6 +283,11 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
     _showCustomToast(message, DesignSystem.errorColor, 3); // Mantener rojo para errores
+  }
+
+  void _showLoadingSnackBar(String message) {
+    if (!mounted) return;
+    _showCustomToast(message, DesignSystem.warningColor, 5); // CHECKME: Usar warningColor para loading
   }
 
   void _showCustomToast(String message, Color color, int duration) {
