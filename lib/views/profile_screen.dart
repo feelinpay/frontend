@@ -646,7 +646,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         user: Provider.of<AuthController>(context, listen: false).currentUser,
         onSave: (updatedUser) {
           // Aquí se actualizaría el usuario en el backend
-          SnackBarHelper.showSuccess(context, 'Perfil actualizado exitosamente');
+          // Sin SnackBar de éxito para evitar latencia
         },
       ),
     );
@@ -661,7 +661,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       context: context,
       builder: (context) => _ChangePasswordDialog(
         onPasswordChanged: () {
-          SnackBarHelper.showSuccess(context, 'Contraseña cambiada exitosamente');
+          // Sin SnackBar de éxito para evitar latencia
         },
       ),
     );
@@ -672,7 +672,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       context: context,
       builder: (context) => _ChangeEmailDialog(
         onEmailChanged: () {
-          SnackBarHelper.showSuccess(context, 'Correo electrónico cambiado exitosamente');
+          // Sin SnackBar de éxito para evitar latencia
         },
       ),
     );
@@ -1444,12 +1444,7 @@ class _ChangeEmailDialogState extends State<_ChangeEmailDialog> {
       final success = await authController.requestEmailChange(_pendingEmail!);
 
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Código reenviado exitosamente'),
-            backgroundColor: DesignSystem.successColor,
-          ),
-        );
+        // Sin SnackBar de éxito para evitar latencia
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

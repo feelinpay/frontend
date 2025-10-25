@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../core/design/design_system.dart';
 import '../widgets/three_dots_menu_widget.dart';
 import '../widgets/snackbar_helper.dart';
+import '../widgets/loading_overlay.dart';
 import '../controllers/auth_controller.dart';
 import '../services/employee_service.dart';
 import '../models/employee_model.dart';
@@ -18,7 +19,7 @@ class EmployeeManagementScreen extends StatefulWidget {
 }
 
 class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, LoadingStateMixin {
   final EmployeeService _employeeService = EmployeeService();
   List<EmployeeModel> _employees = [];
   List<EmployeeModel> _filteredEmployees = [];
@@ -104,40 +105,31 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
   }
 
   Future<void> _toggleAllNotifications() async {
-    try {
-      // Obtener el estado actual basado en todos los empleados
-      final bool allEnabled = _employees.every((employee) => employee.activo);
-      final bool newState = !allEnabled;
-      
-      // Mostrar indicador de carga y bloquear navegación
-      SnackBarHelper.showLoading(
-        context,
-        newState ? 'Activando notificaciones para todos...' : 'Desactivando notificaciones para todos...'
-      );
-      
-      // Realizar la operación en el backend
-      final response = await _employeeService.toggleAllNotifications(newState);
-
-      if (response.isSuccess) {
-        // Actualizar UI solo después del éxito
-        setState(() {
-          _employees = _employees.map((employee) => 
-            employee.copyWith(activo: newState)
-          ).toList();
-          _filteredEmployees = _employees;
-          _notificationsEnabled = newState;
-        });
+    await executeSilently(
+      () async {
+        // Obtener el estado actual basado en todos los empleados
+        final bool allEnabled = _employees.every((employee) => employee.activo);
+        final bool newState = !allEnabled;
         
-        SnackBarHelper.showSuccess(
-          context,
-          newState ? 'Notificaciones activadas para todos' : 'Notificaciones desactivadas para todos'
-        );
-      } else {
-        SnackBarHelper.showError(context, 'Error: ${response.message}');
-      }
-    } catch (e) {
-      SnackBarHelper.showError(context, 'Error de conexión: ${e.toString()}');
-    }
+        // Realizar la operación en el backend
+        final response = await _employeeService.toggleAllNotifications(newState);
+
+        if (response.isSuccess) {
+          // Actualizar UI solo después del éxito
+          setState(() {
+            _employees = _employees.map((employee) => 
+              employee.copyWith(activo: newState)
+            ).toList();
+            _filteredEmployees = _employees;
+            _notificationsEnabled = newState;
+          });
+        } else {
+          throw Exception(response.message);
+        }
+      },
+      loadingMessage: _notificationsEnabled ? 'Desactivando notificaciones para todos...' : 'Activando notificaciones para todos...',
+      errorMessage: 'Error al actualizar notificaciones',
+    );
   }
 
   void _addEmployee() async {
@@ -160,7 +152,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
             _updateNotificationsToggleState();
           });
           
-          SnackBarHelper.showSuccess(context, 'Empleado ${result.nombre} agregado exitosamente');
+          // Sin SnackBar de éxito para evitar latencia
         } else {
           SnackBarHelper.showError(context, ErrorHelper.processApiError(response));
         }
@@ -211,7 +203,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
                     _updateNotificationsToggleState();
                   });
                   
-                  SnackBarHelper.showSuccess(context, 'Empleado ${employee.nombre} eliminado exitosamente');
+                  // Sin SnackBar de éxito para evitar latencia
                 } else {
                   SnackBarHelper.showError(context, ErrorHelper.processApiError(response));
                 }
@@ -232,42 +224,33 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
   }
 
   Future<void> _toggleEmployeeNotifications(EmployeeModel employee) async {
-    try {
-      final bool newState = !employee.activo;
-      final int employeeIndex = _employees.indexWhere((emp) => emp.id == employee.id);
-      
-      if (employeeIndex == -1) return;
-      
-      // Mostrar indicador de carga y bloquear navegación
-      SnackBarHelper.showLoading(
-        context,
-        '${employee.nombre}: ${newState ? 'Activando notificaciones...' : 'Desactivando notificaciones...'}'
-      );
-      
-      // Realizar la operación en el backend
-      final response = await _employeeService.updateNotificationConfig(
-        employeeId: employee.id,
-        notificacionesActivas: newState,
-      );
-
-      if (response.isSuccess) {
-        // Actualizar UI solo después del éxito
-        setState(() {
-          _employees[employeeIndex] = _employees[employeeIndex].copyWith(activo: newState);
-          _filteredEmployees = _employees;
-          _updateNotificationsToggleState();
-        });
+    await executeSilently(
+      () async {
+        final bool newState = !employee.activo;
+        final int employeeIndex = _employees.indexWhere((emp) => emp.id == employee.id);
         
-        SnackBarHelper.showSuccess(
-          context,
-          '${employee.nombre}: ${newState ? 'Notificaciones activadas' : 'Notificaciones desactivadas'}'
+        if (employeeIndex == -1) return;
+        
+        // Realizar la operación en el backend
+        final response = await _employeeService.updateNotificationConfig(
+          employeeId: employee.id,
+          notificacionesActivas: newState,
         );
-      } else {
-        SnackBarHelper.showError(context, 'Error: ${response.message}');
-      }
-    } catch (e) {
-      SnackBarHelper.showError(context, 'Error de conexión: ${e.toString()}');
-    }
+
+        if (response.isSuccess) {
+          // Actualizar UI solo después del éxito
+          setState(() {
+            _employees[employeeIndex] = _employees[employeeIndex].copyWith(activo: newState);
+            _filteredEmployees = _employees;
+            _updateNotificationsToggleState();
+          });
+        } else {
+          throw Exception(response.message);
+        }
+      },
+      loadingMessage: '${employee.nombre}: ${employee.activo ? 'Desactivando notificaciones...' : 'Activando notificaciones...'}',
+      errorMessage: 'Error al actualizar notificaciones de ${employee.nombre}',
+    );
   }
 
 
@@ -326,27 +309,31 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
     final authController = Provider.of<AuthController>(context);
     final isSuperAdmin = authController.isSuperAdmin;
 
-    return Scaffold(
-      backgroundColor: DesignSystem.backgroundColor,
-      body: SafeArea(
-        child: FadeTransition(
-          opacity: _fadeAnimation!,
-          child: Column(
-            children: [
-              _buildHeader(context, isSuperAdmin),
-              _buildNotificationsToggle(),
-              _buildSearchBar(),
-              Expanded(child: _buildEmployeeList()),
-            ],
+    return LoadingOverlay(
+      isLoading: isLoading,
+      message: loadingMessage,
+      child: Scaffold(
+        backgroundColor: DesignSystem.backgroundColor,
+        body: SafeArea(
+          child: FadeTransition(
+            opacity: _fadeAnimation!,
+            child: Column(
+              children: [
+                _buildHeader(context, isSuperAdmin),
+                _buildNotificationsToggle(),
+                _buildSearchBar(),
+                Expanded(child: _buildEmployeeList()),
+              ],
+            ),
           ),
         ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: isLoading ? null : _addEmployee,
+          backgroundColor: isLoading ? DesignSystem.textTertiary : DesignSystem.primaryColor,
+          child: const Icon(Icons.add, color: Colors.white),
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addEmployee,
-        backgroundColor: DesignSystem.primaryColor,
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
