@@ -69,24 +69,30 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard>
     });
 
     try {
+      print('🔍 [SuperAdminDashboard] Loading statistics...');
       final response = await _userService.getStatistics();
+      
+      print('🔍 [SuperAdminDashboard] Statistics response received');
       
       if (response.isSuccess && response.data != null) {
         setState(() {
           _statistics = response.data!;
           _isLoading = false;
         });
+        print('🔍 [SuperAdminDashboard] Statistics loaded successfully: $_statistics');
       } else {
         setState(() {
           _error = response.message;
           _isLoading = false;
         });
+        print('🔍 [SuperAdminDashboard] Error loading statistics: ${response.message}');
       }
     } catch (e) {
       setState(() {
         _error = 'Error al cargar estadísticas: $e';
         _isLoading = false;
       });
+      print('🔍 [SuperAdminDashboard] Exception loading statistics: $e');
     }
   }
 
@@ -280,31 +286,31 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard>
           children: [
             _buildStatCard(
               title: 'Total Usuarios',
-              value: '${stats['totalUsers'] ?? 0}',
+              value: '${stats['totalUsuarios'] ?? stats['totalUsers'] ?? 0}',
               icon: Icons.people,
               color: DesignSystem.primaryColor,
-              trend: stats['usersTrend'] ?? 0,
+              trend: stats['usuariosTrend'] ?? stats['usersTrend'] ?? 0,
             ),
             _buildStatCard(
-              title: 'Propietarios',
-              value: '${stats['totalOwners'] ?? 0}',
+              title: 'Propietarios Activos',
+              value: '${stats['propietariosActivos'] ?? stats['totalOwners'] ?? 0}',
               icon: Icons.business,
               color: DesignSystem.primaryLight,
-              trend: stats['ownersTrend'] ?? 0,
+              trend: stats['propietariosTrend'] ?? stats['ownersTrend'] ?? 0,
             ),
             _buildStatCard(
-              title: 'Empleados',
-              value: '${stats['totalEmployees'] ?? 0}',
+              title: 'Total Empleados',
+              value: '${stats['totalEmpleados'] ?? stats['totalEmployees'] ?? 0}',
               icon: Icons.work,
               color: DesignSystem.secondaryColor,
-              trend: stats['employeesTrend'] ?? 0,
+              trend: stats['empleadosTrend'] ?? stats['employeesTrend'] ?? 0,
             ),
             _buildStatCard(
               title: 'Pagos Hoy',
-              value: '${stats['paymentsToday'] ?? 0}',
+              value: '${stats['pagosHoy'] ?? stats['paymentsToday'] ?? 0}',
               icon: Icons.payment,
               color: DesignSystem.accentColor,
-              trend: stats['paymentsTrend'] ?? 0,
+              trend: stats['pagosTrend'] ?? stats['paymentsTrend'] ?? 0,
             ),
           ],
         ),

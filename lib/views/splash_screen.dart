@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../core/design/design_system.dart';
+import '../controllers/auth_controller.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -123,8 +124,25 @@ class _SplashScreenState extends State<SplashScreen>
     await Future.delayed(const Duration(milliseconds: 2000));
     await _fadeController.forward();
     
-    // Navegar al login
+    // Verificar estado de autenticación y navegar apropiadamente
     if (mounted) {
+      _navigateBasedOnAuthState();
+    }
+  }
+
+  void _navigateBasedOnAuthState() {
+    final authController = Provider.of<AuthController>(context, listen: false);
+    
+    print('🔍 [SPLASH] Verificando estado de autenticación...');
+    print('🔍 [SPLASH] Usuario actual: ${authController.currentUser?.nombre}');
+    print('🔍 [SPLASH] Está autenticado: ${authController.isAuthenticated}');
+    print('🔍 [SPLASH] Está logueado: ${authController.isLoggedIn}');
+    
+    if (authController.isAuthenticated && authController.currentUser != null) {
+      print('🔍 [SPLASH] Usuario autenticado, navegando al dashboard');
+      Navigator.pushReplacementNamed(context, '/dashboard');
+    } else {
+      print('🔍 [SPLASH] Usuario no autenticado, navegando al login');
       Navigator.pushReplacementNamed(context, '/login');
     }
   }
