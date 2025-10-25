@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../core/design/design_system.dart';
 import '../services/user_management_service.dart';
 import '../models/user_model.dart';
 import '../widgets/three_dots_menu_widget.dart';
-import '../widgets/phone_field_widget.dart';
+import '../widgets/loading_overlay.dart';
+import '../views/country_picker.dart';
 import 'owner_employees_screen.dart';
 
 class BusinessManagementScreen extends StatefulWidget {
@@ -14,7 +16,7 @@ class BusinessManagementScreen extends StatefulWidget {
 }
 
 class _BusinessManagementScreenState extends State<BusinessManagementScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, LoadingStateMixin {
   final TextEditingController _searchController = TextEditingController();
   final UserManagementService _userService = UserManagementService();
   
@@ -33,6 +35,15 @@ class _BusinessManagementScreenState extends State<BusinessManagementScreen>
     _initializeAnimations();
     _loadBusinesses();
     _searchController.addListener(_filterBusinesses);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Recargar datos cuando la pantalla se vuelve visible
+    if (ModalRoute.of(context)?.isCurrent == true) {
+      _loadBusinesses();
+    }
   }
 
   void _initializeAnimations() {
@@ -60,7 +71,13 @@ class _BusinessManagementScreenState extends State<BusinessManagementScreen>
     });
 
     try {
+      print('🔍 [BusinessManagementScreen] Loading businesses with rol: propietario');
       final response = await _userService.getAllUsers(rol: 'propietario');
+      
+      print('🔍 [BusinessManagementScreen] Response received:');
+      print('  Success: ${response.isSuccess}');
+      print('  Message: ${response.message}');
+      print('  Data count: ${response.data?.length ?? 0}');
       
       if (response.isSuccess && response.data != null) {
         setState(() {
@@ -69,17 +86,20 @@ class _BusinessManagementScreenState extends State<BusinessManagementScreen>
           _isLoading = false;
         });
         _updateToggleState();
+        print('🔍 [BusinessManagementScreen] Businesses loaded: ${_businesses.length}');
       } else {
         setState(() {
           _error = response.message;
           _isLoading = false;
         });
+        print('🔍 [BusinessManagementScreen] Error: ${response.message}');
       }
     } catch (e) {
       setState(() {
         _error = 'Error al cargar propietarios: $e';
         _isLoading = false;
       });
+      print('🔍 [BusinessManagementScreen] Exception: $e');
     }
   }
 
@@ -113,22 +133,7 @@ class _BusinessManagementScreenState extends State<BusinessManagementScreen>
         _filterBusinesses(); // Actualizar la lista filtrada
       });
       
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _allActive 
-                ? 'Propietarios activados exitosamente'
-                : 'Propietarios desactivados exitosamente'
-            ),
-            backgroundColor: DesignSystem.primaryColor,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
-      }
+      // Sin SnackBar de éxito para evitar latencia
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -150,108 +155,16 @@ class _BusinessManagementScreenState extends State<BusinessManagementScreen>
     final emailController = TextEditingController();
     final phoneController = TextEditingController();
     final formKey = GlobalKey<FormState>();
+    final phoneFieldKey = GlobalKey<_AddBusinessDialogState>();
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(DesignSystem.radiusL),
-        ),
-        title: const Text('Agregar Propietario'),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: nameController,
-                decoration: InputDecoration(
-                  labelText: 'Nombre',
-                  hintText: 'Nombre completo del propietario',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: DesignSystem.surfaceColor,
-                  contentPadding: const EdgeInsets.symmetric(
-                    vertical: DesignSystem.spacingM,
-                    horizontal: DesignSystem.spacingM,
-                  ),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'El nombre es requerido';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: DesignSystem.spacingM),
-              TextFormField(
-                controller: emailController,
-                decoration: InputDecoration(
-                  labelText: 'Email',
-                  hintText: 'Correo electrónico',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: DesignSystem.surfaceColor,
-                  contentPadding: const EdgeInsets.symmetric(
-                    vertical: DesignSystem.spacingM,
-                    horizontal: DesignSystem.spacingM,
-                  ),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'El email es requerido';
-                  }
-                  if (!value.contains('@')) {
-                    return 'Ingresa un email válido';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: DesignSystem.spacingM),
-              PhoneFieldWidget(
-                controller: phoneController,
-                labelText: 'Teléfono',
-                hintText: 'Número de teléfono',
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'El teléfono es requerido';
-                  }
-                  return null;
-                },
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text(
-              'Cancelar',
-              style: TextStyle(color: DesignSystem.textSecondary),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.of(context).pop(true);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: DesignSystem.primaryColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-              ),
-            ),
-            child: const Text('Agregar'),
-          ),
-        ],
+      builder: (context) => _AddBusinessDialog(
+        key: phoneFieldKey,
+        nameController: nameController,
+        emailController: emailController,
+        phoneController: phoneController,
+        formKey: formKey,
       ),
     );
 
@@ -270,11 +183,14 @@ class _BusinessManagementScreenState extends State<BusinessManagementScreen>
           propietarioRolId = propietarioRol['id'];
         }
 
+        // Obtener el número de teléfono completo con código de país
+        final fullPhoneNumber = phoneFieldKey.currentState?.getFullPhoneNumber() ?? phoneController.text;
+
         // Crear propietario usando el servicio real
         final response = await _userService.createUser(
           nombre: nameController.text,
           email: emailController.text,
-          telefono: phoneController.text,
+          telefono: fullPhoneNumber,
           password: 'temp123456', // Contraseña temporal
           rolId: propietarioRolId ?? 'default-rol-id',
         );
@@ -286,18 +202,7 @@ class _BusinessManagementScreenState extends State<BusinessManagementScreen>
           });
           _updateToggleState();
           
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Propietario ${nameController.text} agregado exitosamente'),
-                backgroundColor: DesignSystem.primaryColor,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            );
-          }
+          // Sin SnackBar de éxito para evitar latencia
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -332,106 +237,31 @@ class _BusinessManagementScreenState extends State<BusinessManagementScreen>
   Future<void> _editBusiness(UserModel business) async {
     final nameController = TextEditingController(text: business.nombre);
     final emailController = TextEditingController(text: business.email);
+    final phoneController = TextEditingController(text: business.telefono);
     final formKey = GlobalKey<FormState>();
+    final phoneFieldKey = GlobalKey<_EditBusinessDialogState>();
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(DesignSystem.radiusL),
-        ),
-        title: const Text('Editar Propietario'),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: nameController,
-                decoration: InputDecoration(
-                  labelText: 'Nombre',
-                  hintText: 'Nombre del propietario',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: DesignSystem.surfaceColor,
-                  contentPadding: const EdgeInsets.symmetric(
-                    vertical: DesignSystem.spacingM,
-                    horizontal: DesignSystem.spacingM,
-                  ),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'El nombre es requerido';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: DesignSystem.spacingM),
-              TextFormField(
-                controller: emailController,
-                decoration: InputDecoration(
-                  labelText: 'Email',
-                  hintText: 'Correo electrónico',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: DesignSystem.surfaceColor,
-                  contentPadding: const EdgeInsets.symmetric(
-                    vertical: DesignSystem.spacingM,
-                    horizontal: DesignSystem.spacingM,
-                  ),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'El email es requerido';
-                  }
-                  if (!value.contains('@')) {
-                    return 'Ingresa un email válido';
-                  }
-                  return null;
-                },
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text(
-              'Cancelar',
-              style: TextStyle(color: DesignSystem.textSecondary),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.of(context).pop(true);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: DesignSystem.primaryColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-              ),
-            ),
-            child: const Text('Guardar'),
-          ),
-        ],
+      builder: (context) => _EditBusinessDialog(
+        key: phoneFieldKey,
+        nameController: nameController,
+        emailController: emailController,
+        phoneController: phoneController,
+        formKey: formKey,
       ),
     );
 
     if (result == true) {
       try {
+        // Obtener el número de teléfono completo con código de país
+        final fullPhoneNumber = phoneFieldKey.currentState?.getFullPhoneNumber() ?? phoneController.text;
+
         final response = await _userService.updateUser(
           business.id,
           nombre: nameController.text,
           email: emailController.text,
+          telefono: fullPhoneNumber,
         );
 
         if (response.isSuccess && response.data != null) {
@@ -443,18 +273,7 @@ class _BusinessManagementScreenState extends State<BusinessManagementScreen>
             }
           });
           
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Propietario actualizado exitosamente'),
-                backgroundColor: DesignSystem.primaryColor,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            );
-          }
+          // Sin SnackBar de éxito para evitar latencia
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -510,40 +329,23 @@ class _BusinessManagementScreenState extends State<BusinessManagementScreen>
     );
 
     if (confirmed == true) {
-      try {
-        // TODO: Implementar eliminación real
-        setState(() {
-          _businesses.removeWhere((b) => b.id == business.id);
-          _filterBusinesses();
-        });
-        _updateToggleState();
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Propietario ${business.nombre} eliminado exitosamente'),
-              backgroundColor: DesignSystem.primaryColor,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: $e'),
-              backgroundColor: DesignSystem.errorColor,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          );
-        }
-      }
+      await executeSilently(
+        () async {
+          final response = await _userService.deleteUser(business.id);
+          
+          if (response.isSuccess) {
+            setState(() {
+              _businesses.removeWhere((b) => b.id == business.id);
+              _filterBusinesses();
+            });
+            _updateToggleState();
+          } else {
+            throw Exception(response.message);
+          }
+        },
+        loadingMessage: 'Eliminando propietario ${business.nombre}...',
+        errorMessage: 'Error al eliminar propietario',
+      );
     }
   }
 
@@ -561,22 +363,7 @@ class _BusinessManagementScreenState extends State<BusinessManagementScreen>
         });
         _updateToggleState();
         
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                response.data!.activo 
-                  ? 'Propietario activado exitosamente' 
-                  : 'Propietario desactivado exitosamente'
-              ),
-              backgroundColor: DesignSystem.primaryColor,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          );
-        }
+        // Sin SnackBar de éxito para evitar latencia
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -617,28 +404,31 @@ class _BusinessManagementScreenState extends State<BusinessManagementScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: DesignSystem.backgroundColor,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header con gradiente
-            Container(
-              padding: const EdgeInsets.all(DesignSystem.spacingL),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    DesignSystem.primaryColor,
-                    DesignSystem.primaryLight,
-                  ],
+    return LoadingOverlay(
+      isLoading: isLoading,
+      message: loadingMessage,
+      child: Scaffold(
+        backgroundColor: DesignSystem.backgroundColor,
+        body: SafeArea(
+          child: Column(
+            children: [
+              // Header con gradiente
+              Container(
+                padding: const EdgeInsets.all(DesignSystem.spacingL),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      DesignSystem.primaryColor,
+                      DesignSystem.primaryLight,
+                    ],
+                  ),
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(DesignSystem.radiusXL),
+                    bottomRight: Radius.circular(DesignSystem.radiusXL),
+                  ),
                 ),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(DesignSystem.radiusXL),
-                  bottomRight: Radius.circular(DesignSystem.radiusXL),
-                ),
-              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -725,7 +515,7 @@ class _BusinessManagementScreenState extends State<BusinessManagementScreen>
                         Switch(
                           value: _allActive,
                           onChanged: (value) => _toggleAllBusinesses(),
-                          activeColor: Colors.white,
+                          activeThumbColor: Colors.white,
                           activeTrackColor: Colors.white.withOpacity(0.3),
                           inactiveThumbColor: Colors.white70,
                           inactiveTrackColor: Colors.white.withOpacity(0.2),
@@ -818,9 +608,10 @@ class _BusinessManagementScreenState extends State<BusinessManagementScreen>
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _addBusiness,
-        backgroundColor: DesignSystem.primaryColor,
+        onPressed: isLoading ? null : _addBusiness,
+        backgroundColor: isLoading ? DesignSystem.textTertiary : DesignSystem.primaryColor,
         child: const Icon(Icons.add, color: Colors.white),
+      ),
       ),
     );
   }
@@ -954,6 +745,692 @@ class _BusinessManagementScreenState extends State<BusinessManagementScreen>
           ),
         ),
       ),
+    );
+  }
+}
+
+class _EditBusinessDialog extends StatefulWidget {
+  final TextEditingController nameController;
+  final TextEditingController emailController;
+  final TextEditingController phoneController;
+  final GlobalKey<FormState> formKey;
+
+  const _EditBusinessDialog({
+    super.key,
+    required this.nameController,
+    required this.emailController,
+    required this.phoneController,
+    required this.formKey,
+  });
+
+  @override
+  State<_EditBusinessDialog> createState() => _EditBusinessDialogState();
+}
+
+class _EditBusinessDialogState extends State<_EditBusinessDialog> {
+  Country? _selectedCountry;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCountry = _getDefaultCountry();
+    _parseExistingPhoneNumber();
+  }
+
+  Country _getDefaultCountry() {
+    return Country(
+      name: 'Perú',
+      code: 'PE',
+      dialCode: '+51',
+      flag: '🇵🇪',
+    );
+  }
+
+  void _parseExistingPhoneNumber() {
+    final phoneNumber = widget.phoneController.text;
+    if (phoneNumber.isNotEmpty) {
+      // Buscar el país que coincida con el código de país del teléfono
+      for (final country in countries) {
+        if (phoneNumber.startsWith(country.dialCode)) {
+          setState(() {
+            _selectedCountry = country;
+          });
+          // Remover el código de país del número para mostrar solo el número
+          widget.phoneController.text = phoneNumber.substring(country.dialCode.length);
+          break;
+        }
+      }
+    }
+  }
+
+  void _showCountryPicker() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.8,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              spreadRadius: 0,
+              blurRadius: 30,
+              offset: const Offset(0, -8),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            // Handle bar elegante
+            Container(
+              margin: const EdgeInsets.only(top: 16),
+              width: 50,
+              height: 5,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE2E8F0),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            // Header con título y botón de cierre
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  const Text(
+                    'Seleccionar País',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1F2937),
+                    ),
+                  ),
+                  const Spacer(),
+                  // Botón de cierre
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Color(0xFF64748B),
+                      size: 24,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Country picker sin header
+            Expanded(
+              child: CountryPicker(
+                showHeader: false,
+                onCountrySelected: (country) {
+                  setState(() {
+                    _selectedCountry = country;
+                  });
+                  Navigator.pop(context);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Obtener el número de teléfono completo con código de país
+  String getFullPhoneNumber() {
+    String phoneNumber = widget.phoneController.text.trim();
+    
+    if (phoneNumber.startsWith('+')) {
+      return phoneNumber;
+    } else {
+      return '${_selectedCountry!.dialCode}$phoneNumber';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(DesignSystem.radiusL),
+      ),
+      title: const Text('Editar Propietario'),
+      content: Form(
+        key: widget.formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: widget.nameController,
+              decoration: InputDecoration(
+                labelText: 'Nombre',
+                hintText: 'Nombre del propietario',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: DesignSystem.surfaceColor,
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: DesignSystem.spacingM,
+                  horizontal: DesignSystem.spacingM,
+                ),
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'El nombre es requerido';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: DesignSystem.spacingM),
+            TextFormField(
+              controller: widget.emailController,
+              decoration: InputDecoration(
+                labelText: 'Email',
+                hintText: 'Correo electrónico',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: DesignSystem.surfaceColor,
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: DesignSystem.spacingM,
+                  horizontal: DesignSystem.spacingM,
+                ),
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'El email es requerido';
+                }
+                if (!value.contains('@')) {
+                  return 'Ingresa un email válido';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: DesignSystem.spacingM),
+            // Campo de teléfono con selector de país
+            Row(
+              children: [
+                // Selector de país
+                GestureDetector(
+                  onTap: _showCountryPicker,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: DesignSystem.spacingM,
+                      vertical: DesignSystem.spacingM,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: DesignSystem.textTertiary.withOpacity(0.3),
+                        width: 1,
+                      ),
+                      borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                      color: DesignSystem.surfaceColor,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_selectedCountry != null) ...[
+                          Text(
+                            _selectedCountry!.flag,
+                            style: const TextStyle(fontSize: 20),
+                          ),
+                          const SizedBox(width: DesignSystem.spacingS),
+                          Text(
+                            _selectedCountry!.dialCode,
+                            style: TextStyle(
+                              fontSize: DesignSystem.fontSizeM,
+                              fontWeight: FontWeight.w500,
+                              color: DesignSystem.textPrimary,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(width: DesignSystem.spacingS),
+                        Icon(
+                          Icons.keyboard_arrow_down,
+                          color: DesignSystem.textSecondary,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: DesignSystem.spacingM),
+                // Campo de número
+                Expanded(
+                  child: TextFormField(
+                    controller: widget.phoneController,
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    style: TextStyle(
+                      fontSize: DesignSystem.fontSizeM,
+                      color: DesignSystem.textPrimary,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Número de teléfono',
+                      hintStyle: TextStyle(
+                        fontSize: DesignSystem.fontSizeM,
+                        color: DesignSystem.textLight,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.phone_outlined,
+                        color: DesignSystem.textSecondary,
+                        size: 20,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: DesignSystem.spacingM,
+                        vertical: DesignSystem.spacingM,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                        borderSide: BorderSide(
+                          color: DesignSystem.textTertiary.withOpacity(0.3),
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                        borderSide: BorderSide(
+                          color: DesignSystem.textTertiary.withOpacity(0.3),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                        borderSide: const BorderSide(
+                          color: DesignSystem.primaryColor,
+                          width: 2,
+                        ),
+                      ),
+                      errorBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                        borderSide: const BorderSide(
+                          color: DesignSystem.errorColor,
+                        ),
+                      ),
+                      focusedErrorBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                        borderSide: const BorderSide(
+                          color: DesignSystem.errorColor,
+                          width: 2,
+                        ),
+                      ),
+                      filled: true,
+                      fillColor: DesignSystem.surfaceColor,
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'El teléfono es requerido';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text(
+            'Cancelar',
+            style: TextStyle(color: DesignSystem.textSecondary),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            if (widget.formKey.currentState!.validate()) {
+              Navigator.of(context).pop(true);
+            }
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: DesignSystem.primaryColor,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+            ),
+          ),
+          child: const Text('Guardar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AddBusinessDialog extends StatefulWidget {
+  final TextEditingController nameController;
+  final TextEditingController emailController;
+  final TextEditingController phoneController;
+  final GlobalKey<FormState> formKey;
+
+  const _AddBusinessDialog({
+    super.key,
+    required this.nameController,
+    required this.emailController,
+    required this.phoneController,
+    required this.formKey,
+  });
+
+  @override
+  State<_AddBusinessDialog> createState() => _AddBusinessDialogState();
+}
+
+class _AddBusinessDialogState extends State<_AddBusinessDialog> {
+  Country? _selectedCountry;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCountry = _getDefaultCountry();
+  }
+
+  Country _getDefaultCountry() {
+    return Country(
+      name: 'Perú',
+      code: 'PE',
+      dialCode: '+51',
+      flag: '🇵🇪',
+    );
+  }
+
+  void _showCountryPicker() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.8,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              spreadRadius: 0,
+              blurRadius: 30,
+              offset: const Offset(0, -8),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            // Handle bar elegante
+            Container(
+              margin: const EdgeInsets.only(top: 16),
+              width: 50,
+              height: 5,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE2E8F0),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            // Header con título y botón de cierre
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  const Text(
+                    'Seleccionar País',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1F2937),
+                    ),
+                  ),
+                  const Spacer(),
+                  // Botón de cierre
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Color(0xFF64748B),
+                      size: 24,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Country picker sin header
+            Expanded(
+              child: CountryPicker(
+                showHeader: false,
+                onCountrySelected: (country) {
+                  setState(() {
+                    _selectedCountry = country;
+                  });
+                  Navigator.pop(context);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Obtener el número de teléfono completo con código de país
+  String getFullPhoneNumber() {
+    String phoneNumber = widget.phoneController.text.trim();
+    
+    if (phoneNumber.startsWith('+')) {
+      return phoneNumber;
+    } else {
+      return '${_selectedCountry!.dialCode}$phoneNumber';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(DesignSystem.radiusL),
+      ),
+      title: const Text('Agregar Propietario'),
+      content: Form(
+        key: widget.formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: widget.nameController,
+              decoration: InputDecoration(
+                labelText: 'Nombre',
+                hintText: 'Nombre completo del propietario',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: DesignSystem.surfaceColor,
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: DesignSystem.spacingM,
+                  horizontal: DesignSystem.spacingM,
+                ),
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'El nombre es requerido';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: DesignSystem.spacingM),
+            TextFormField(
+              controller: widget.emailController,
+              decoration: InputDecoration(
+                labelText: 'Email',
+                hintText: 'Correo electrónico',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: DesignSystem.surfaceColor,
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: DesignSystem.spacingM,
+                  horizontal: DesignSystem.spacingM,
+                ),
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'El email es requerido';
+                }
+                if (!value.contains('@')) {
+                  return 'Ingresa un email válido';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: DesignSystem.spacingM),
+            // Campo de teléfono con selector de país
+            Row(
+              children: [
+                // Selector de país
+                GestureDetector(
+                  onTap: _showCountryPicker,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: DesignSystem.spacingM,
+                      vertical: DesignSystem.spacingM,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: DesignSystem.textTertiary.withOpacity(0.3),
+                        width: 1,
+                      ),
+                      borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                      color: DesignSystem.surfaceColor,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_selectedCountry != null) ...[
+                          Text(
+                            _selectedCountry!.flag,
+                            style: const TextStyle(fontSize: 20),
+                          ),
+                          const SizedBox(width: DesignSystem.spacingS),
+                          Text(
+                            _selectedCountry!.dialCode,
+                            style: TextStyle(
+                              fontSize: DesignSystem.fontSizeM,
+                              fontWeight: FontWeight.w500,
+                              color: DesignSystem.textPrimary,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(width: DesignSystem.spacingS),
+                        Icon(
+                          Icons.keyboard_arrow_down,
+                          color: DesignSystem.textSecondary,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: DesignSystem.spacingM),
+                // Campo de número
+                Expanded(
+                  child: TextFormField(
+                    controller: widget.phoneController,
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    style: TextStyle(
+                      fontSize: DesignSystem.fontSizeM,
+                      color: DesignSystem.textPrimary,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Número de teléfono',
+                      hintStyle: TextStyle(
+                        fontSize: DesignSystem.fontSizeM,
+                        color: DesignSystem.textLight,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.phone_outlined,
+                        color: DesignSystem.textSecondary,
+                        size: 20,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: DesignSystem.spacingM,
+                        vertical: DesignSystem.spacingM,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                        borderSide: BorderSide(
+                          color: DesignSystem.textTertiary.withOpacity(0.3),
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                        borderSide: BorderSide(
+                          color: DesignSystem.textTertiary.withOpacity(0.3),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                        borderSide: const BorderSide(
+                          color: DesignSystem.primaryColor,
+                          width: 2,
+                        ),
+                      ),
+                      errorBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                        borderSide: const BorderSide(
+                          color: DesignSystem.errorColor,
+                        ),
+                      ),
+                      focusedErrorBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                        borderSide: const BorderSide(
+                          color: DesignSystem.errorColor,
+                          width: 2,
+                        ),
+                      ),
+                      filled: true,
+                      fillColor: DesignSystem.surfaceColor,
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'El teléfono es requerido';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text(
+            'Cancelar',
+            style: TextStyle(color: DesignSystem.textSecondary),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            if (widget.formKey.currentState!.validate()) {
+              Navigator.of(context).pop(true);
+            }
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: DesignSystem.primaryColor,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+            ),
+          ),
+          child: const Text('Agregar'),
+        ),
+      ],
     );
   }
 }

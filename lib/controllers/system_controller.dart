@@ -25,8 +25,9 @@ class SystemController extends ChangeNotifier {
 
   // Verificar conectividad a Internet
   Future<void> checkInternetConnection() async {
-    if (_isCheckingConnectivity)
+    if (_isCheckingConnectivity) {
       return; // Evitar múltiples verificaciones simultáneas
+    }
 
     _setCheckingConnectivity(true);
     _clearError();
@@ -34,9 +35,10 @@ class SystemController extends ChangeNotifier {
     try {
       print('🔍 [CONNECTIVITY] Verificando conectividad...');
       // Simple connectivity check - try to reach the backend
+      // Usar un endpoint simple para verificar conectividad
       final response = await http
           .get(
-            Uri.parse('${AppConfig.apiBaseUrl}/health'),
+            Uri.parse('${AppConfig.apiBaseUrl}/public/health'),
             headers: {'Content-Type': 'application/json'},
           )
           .timeout(const Duration(seconds: 3)); // Reducido timeout

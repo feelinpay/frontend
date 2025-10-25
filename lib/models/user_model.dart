@@ -46,8 +46,8 @@ class UserModel {
       telefono: json['telefono'] ?? '',
       email: json['email'] ?? '',
       rolId: json['rolId'] ?? '',
-      rol: json['rol'] is Map ? json['rol']['nombre'] : json['rol'],
-      rolNombre: json['rol'] is Map ? json['rol']['nombre'] : json['rolNombre'],
+      rol: json['rol'] is Map ? json['rol']['nombre'] : json['rol']?.toString(),
+      rolNombre: json['rol'] is Map ? json['rol']['nombre'] : json['rolNombre']?.toString(),
       activo: json['activo'] ?? false,
       enPeriodoPrueba: json['enPeriodoPrueba'] ?? false,
       fechaInicioPrueba: json['fechaInicioPrueba'] != null

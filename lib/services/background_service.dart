@@ -47,7 +47,7 @@ class BackgroundService {
       // Simple connectivity check - try to reach the backend
       final response = await http
           .get(
-            Uri.parse('${AppConfig.apiBaseUrl}/health'),
+            Uri.parse('${AppConfig.apiBaseUrl}/public/health'),
             headers: {'Content-Type': 'application/json'},
           )
           .timeout(const Duration(seconds: 5));

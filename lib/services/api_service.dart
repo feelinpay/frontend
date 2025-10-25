@@ -233,12 +233,24 @@ class ApiService {
     final data = response.data;
     
     if (data is Map<String, dynamic>) {
-      return ApiResponse<T>(
-        success: data['success'] ?? true,
-        message: data['message'] ?? 'Operación exitosa',
-        data: data['data'],
-        errors: data['errors'],
-      );
+      // Si el backend devuelve un objeto con success, message, data
+      if (data.containsKey('success') && data.containsKey('data')) {
+        return ApiResponse<T>(
+          success: data['success'] ?? true,
+          message: data['message'] ?? 'Operación exitosa',
+          data: data['data'],
+          errors: data['errors'],
+        );
+      }
+      // Si el backend devuelve los datos directamente
+      else {
+        return ApiResponse<T>(
+          success: true,
+          message: data['message'] ?? 'Operación exitosa',
+          data: data as T?,
+          errors: data['errors'],
+        );
+      }
     }
     
     return ApiResponse<T>(
