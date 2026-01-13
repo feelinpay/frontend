@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import '../core/config/app_config.dart';
+import '../services/api_service.dart';
+// import 'package:flutter_notification_listener_plus/flutter_notification_listener_plus.dart';
+// import '../services/notification_reader_service.dart';
 
 class SystemPermissionsScreen extends StatefulWidget {
-  const SystemPermissionsScreen({Key? key}) : super(key: key);
+  const SystemPermissionsScreen({super.key});
 
   @override
   State<SystemPermissionsScreen> createState() =>
@@ -29,23 +29,22 @@ class _SystemPermissionsScreenState extends State<SystemPermissionsScreen> {
         _error = null;
       });
 
-      final response = await http.get(
-        Uri.parse('${AppConfig.apiBaseUrl}/system/permissions'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${await _getToken()}',
-        },
+      final response = await ApiService().get<Map<String, dynamic>>(
+        '/system/permissions',
       );
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+      if (response.isSuccess) {
+        // ApiService parses JSON automatically, but we need to match the structure
+        // If ApiService returns Map<String, dynamic>, we can use it directly
+        // However, if the response is dynamic, we need to cast or ensure it is what we expect.
+        // Assuming ApiService returns the parsed JSON body.
         setState(() {
-          _permissions = data;
+          _permissions = response.data;
           _isLoading = false;
         });
       } else {
         setState(() {
-          _error = 'Error al cargar permisos: ${response.statusCode}';
+          _error = 'Error al cargar permisos: ${response.message}';
           _isLoading = false;
         });
       }
@@ -55,12 +54,6 @@ class _SystemPermissionsScreenState extends State<SystemPermissionsScreen> {
         _isLoading = false;
       });
     }
-  }
-
-  Future<String?> _getToken() async {
-    // Aquí deberías obtener el token del storage local
-    // Por ahora retornamos null para pruebas
-    return null;
   }
 
   @override
@@ -158,6 +151,10 @@ class _SystemPermissionsScreenState extends State<SystemPermissionsScreen> {
             ...permissions.map(
               (permission) => _buildPermissionCard(permission),
             ),
+
+          const SizedBox(height: 32),
+          _buildDebugSection(),
+          const SizedBox(height: 32),
         ],
       ),
     );
@@ -241,6 +238,47 @@ class _SystemPermissionsScreenState extends State<SystemPermissionsScreen> {
           color: Colors.blue[700],
           fontWeight: FontWeight.w500,
         ),
+      ),
+    );
+  }
+
+  Widget _buildDebugSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "🛠️ Zona de Pruebas (Debug)",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _simulateYapePayment,
+              icon: const Icon(Icons.notifications_active),
+              label: const Text("Simular Yape de S/ 1.00"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF7421B0), // Yape color
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _simulateYapePayment() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("🚀 Simulación deshabilitada (Servicio actualizado)"),
       ),
     );
   }

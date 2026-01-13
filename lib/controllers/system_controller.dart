@@ -2,62 +2,108 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart'
     as permission_handler;
-import 'package:http/http.dart' as http;
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../services/permission_service.dart';
-import '../core/config/app_config.dart';
+import '../services/api_service.dart';
+import 'dart:io'; // NEW: Para Socket ping
 
 class SystemController extends ChangeNotifier {
+  static final SystemController _instance = SystemController._internal();
+  factory SystemController() => _instance;
+  SystemController._internal();
+
   bool _hasInternetConnection = false;
+  bool _isBackendReachable = false;
   bool _hasSMSPermission = false;
   bool _hasNotificationPermission = false;
   bool _isCheckingPermissions = false;
   bool _isCheckingConnectivity = false;
   String _connectionType = 'Unknown';
-  String? _errorMessage;
+  String? _error; // Renamed from _errorMessage
 
   bool get hasInternetConnection => _hasInternetConnection;
+  bool get isBackendReachable => _isBackendReachable;
   bool get hasSMSPermission => _hasSMSPermission;
   bool get hasNotificationPermission => _hasNotificationPermission;
   bool get isCheckingPermissions => _isCheckingPermissions;
   bool get isCheckingConnectivity => _isCheckingConnectivity;
   String get connectionType => _connectionType;
-  String? get errorMessage => _errorMessage;
+  String? get error => _error; // Renamed from errorMessage
+
+  /// Forzar estado de conexión (útil cuando una llamada API externa tiene éxito)
+  void setConnectivityManual(bool hasConnection) {
+    if (_hasInternetConnection != hasConnection) {
+      _hasInternetConnection = hasConnection;
+      _isBackendReachable = hasConnection;
+      if (hasConnection) _error = null;
+      notifyListeners();
+    }
+  }
+
+  // ========================================
+  // INICIALIZACIÓN
+  // ========================================
 
   // Verificar conectividad a Internet
   Future<void> checkInternetConnection() async {
-    if (_isCheckingConnectivity) {
-      return; // Evitar múltiples verificaciones simultáneas
-    }
+    if (_isCheckingConnectivity) return;
 
     _setCheckingConnectivity(true);
     _clearError();
 
     try {
-      print('🔍 [CONNECTIVITY] Verificando conectividad...');
-      // Simple connectivity check - try to reach the backend
-      // Usar un endpoint simple para verificar conectividad
-      final response = await http
-          .get(
-            Uri.parse('${AppConfig.apiBaseUrl}/public/health'),
-            headers: {'Content-Type': 'application/json'},
-          )
-          .timeout(const Duration(seconds: 3)); // Reducido timeout
+      // 1. Verificar si el dispositivo tiene red (WiFi/Datos)
+      final connectivityResult = await Connectivity().checkConnectivity();
+      bool hasDeviceRed = !connectivityResult.contains(ConnectivityResult.none);
+      _connectionType = connectivityResult.isNotEmpty
+          ? connectivityResult.first.name
+          : 'Unknown';
 
-      _hasInternetConnection = response.statusCode == 200;
-      _connectionType = 'Local Network';
-      print(
-        '🔍 [CONNECTIVITY] Status: ${response.statusCode}, Connected: $_hasInternetConnection',
-      );
+      // 2. Robust internet check (Secondary check)
+      // Attempt Socket ping if OS says no network or as verification
+      bool canPing = false;
+      try {
+        final result = await Socket.connect(
+          '8.8.8.8',
+          53,
+          timeout: const Duration(seconds: 2),
+        );
+        await result.close();
+        canPing = true;
+      } catch (_) {
+        canPing = false;
+      }
 
-      if (!_hasInternetConnection) {
-        _setError('Sin conexión a Internet');
+      _hasInternetConnection = hasDeviceRed || canPing;
+
+      // 3. Intentar alcanzar el backend
+      try {
+        final response = await ApiService()
+            .get('/public/health')
+            .timeout(const Duration(seconds: 4));
+
+        _isBackendReachable = response.isSuccess;
+
+        if (_isBackendReachable) {
+          _hasInternetConnection = true;
+          _clearError();
+        } else {
+          if (!_hasInternetConnection) {
+            _setError('Sin conexión a Internet');
+          } else {
+            _setError('Servidor no disponible');
+          }
+        }
+      } catch (e) {
+        _isBackendReachable = false;
+        if (!_hasInternetConnection) _setError('Sin conexión a Internet');
       }
 
       notifyListeners();
     } catch (e) {
-      print('⚠️ [CONNECTIVITY] Error: ${e.toString()}');
-      _setError('Error verificando conectividad: ${e.toString()}');
+      debugPrint('⚠️ [CONNECTIVITY] Error: $e');
       _hasInternetConnection = false;
+      _isBackendReachable = false;
       notifyListeners();
     } finally {
       _setCheckingConnectivity(false);
@@ -220,12 +266,13 @@ class SystemController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _setError(String error) {
-    _errorMessage = error;
+  void _setError(String? message) {
+    _error = message;
     notifyListeners();
   }
 
   void _clearError() {
-    _errorMessage = null;
+    _error = null;
+    notifyListeners();
   }
 }

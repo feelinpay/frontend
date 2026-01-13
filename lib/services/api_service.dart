@@ -1,16 +1,17 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../core/config/app_config.dart';
+import '../controllers/system_controller.dart';
 
 class ApiService {
-  static const String _baseUrl = AppConfig.apiBaseUrl;
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
   ApiService._internal();
 
   late Dio _dio;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
-  
+
   // Token management
   String? _authToken;
   bool _isInitialized = false;
@@ -19,16 +20,20 @@ class ApiService {
   Future<void> initialize() async {
     if (_isInitialized) return;
 
-    _dio = Dio(BaseOptions(
-      baseUrl: _baseUrl,
-      connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 30),
-      sendTimeout: const Duration(seconds: 30),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-    ));
+    // FORCE OVERRIDE DEBUG REMOVED
+
+    _dio = Dio(
+      BaseOptions(
+        baseUrl: AppConfig.apiBaseUrl,
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
+        sendTimeout: const Duration(seconds: 30),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ),
+    );
 
     _setupInterceptors();
     await _loadStoredToken();
@@ -41,35 +46,52 @@ class ApiService {
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           // Agregar token de autenticación automáticamente
-          if (_authToken != null) {
+          // Agregar token de autenticación automáticamente (EXCEPTO para rutas públicas)
+          // Check both path and uri to be sure
+          final isPublic =
+              options.path.contains('/public') ||
+              options.uri.toString().contains('/public');
+
+          if (_authToken != null && !isPublic) {
             options.headers['Authorization'] = 'Bearer $_authToken';
+          } else {
+            // Explicitly remove it if it somehow got there for public routes
+            options.headers.remove('Authorization');
           }
-          
+
           // Log de requests en desarrollo
           if (AppConfig.isDevelopment) {
-            print('🚀 API Request: ${options.method} ${options.path}');
+            debugPrint('🚀 API Request: ${options.method} ${options.path}');
             if (options.data != null) {
-              print('📤 Request Data: ${options.data}');
+              debugPrint('📤 Request Data: ${options.data}');
             }
           }
-          
+
           handler.next(options);
         },
         onResponse: (response, handler) {
           // Log de responses en desarrollo
           if (AppConfig.isDevelopment) {
-            print('✅ API Response: ${response.statusCode} ${response.requestOptions.path}');
+            debugPrint(
+              '✅ API Response: ${response.statusCode} ${response.requestOptions.path}',
+            );
             if (response.data != null) {
-              print('📥 Response Data: ${response.data}');
+              debugPrint('📥 Response Data: ${response.data}');
             }
           }
+
+          // ACTUALIZAR CONECTIVIDAD: Si recibimos una respuesta, tenemos internet
+          SystemController().setConnectivityManual(true);
+
           handler.next(response);
         },
         onError: (error, handler) async {
           // Log de errores en desarrollo
           if (AppConfig.isDevelopment) {
-            print('❌ API Error: ${error.response?.statusCode} ${error.requestOptions.path}');
-            print('🔍 Error Data: ${error.response?.data}');
+            debugPrint(
+              '❌ API Error: ${error.response?.statusCode} ${error.requestOptions.path}',
+            );
+            debugPrint('🔍 Error Data: ${error.response?.data}');
           }
 
           // Manejar token expirado (401)
@@ -98,7 +120,7 @@ class ApiService {
     try {
       _authToken = await _storage.read(key: 'auth_token');
     } catch (e) {
-      print('Error loading stored token: $e');
+      debugPrint('Error loading stored token: $e');
     }
   }
 
@@ -142,10 +164,7 @@ class ApiService {
         throw ApiException('No autenticado', 401);
       }
 
-      final response = await _dio.get(
-        path,
-        queryParameters: queryParameters,
-      );
+      final response = await _dio.get(path, queryParameters: queryParameters);
 
       return _handleResponse<T>(response);
     } catch (e) {
@@ -210,6 +229,7 @@ class ApiService {
   /// DELETE Request
   Future<ApiResponse<T>> delete<T>(
     String path, {
+    dynamic data,
     bool requireAuth = true,
   }) async {
     try {
@@ -217,7 +237,7 @@ class ApiService {
         throw ApiException('No autenticado', 401);
       }
 
-      final response = await _dio.delete(path);
+      final response = await _dio.delete(path, data: data);
       return _handleResponse<T>(response);
     } catch (e) {
       return _handleError<T>(e);
@@ -231,7 +251,7 @@ class ApiService {
   /// Manejar respuesta exitosa
   ApiResponse<T> _handleResponse<T>(Response response) {
     final data = response.data;
-    
+
     if (data is Map<String, dynamic>) {
       // Si el backend devuelve un objeto con success, message, data
       if (data.containsKey('success') && data.containsKey('data')) {
@@ -252,7 +272,7 @@ class ApiService {
         );
       }
     }
-    
+
     return ApiResponse<T>(
       success: true,
       message: 'Operación exitosa',
@@ -265,7 +285,7 @@ class ApiService {
     if (error is DioException) {
       final statusCode = error.response?.statusCode ?? 500;
       final message = _getErrorMessage(error);
-      
+
       return ApiResponse<T>(
         success: false,
         message: message,
@@ -273,7 +293,7 @@ class ApiService {
         statusCode: statusCode,
       );
     }
-    
+
     return ApiResponse<T>(
       success: false,
       message: 'Error inesperado: ${error.toString()}',
@@ -284,12 +304,13 @@ class ApiService {
   /// Obtener mensaje de error apropiado
   String _getErrorMessage(DioException error) {
     final response = error.response;
-    
+
     if (response?.data is Map<String, dynamic>) {
       final data = response!.data as Map<String, dynamic>;
-      return data['message'] ?? _getDefaultErrorMessage(error.response?.statusCode);
+      return data['message'] ??
+          _getDefaultErrorMessage(error.response?.statusCode);
     }
-    
+
     return _getDefaultErrorMessage(error.response?.statusCode);
   }
 
@@ -368,4 +389,3 @@ class ApiException implements Exception {
   @override
   String toString() => 'ApiException: $message';
 }
-

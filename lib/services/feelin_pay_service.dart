@@ -1,476 +1,18 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 import '../database/local_database.dart';
-import '../core/config/app_config.dart';
-// StringUtils removed - using built-in string methods
+import 'api_service.dart';
 
 /// Servicio principal de Feelin Pay que integra todas las funcionalidades
 class FeelinPayService {
-  static String get baseUrl => AppConfig.apiBaseUrl;
-  static const String _tokenKey = 'auth_token';
-  static const String _userKey = 'user_data';
-
-  // Headers comunes
-  static Map<String, String> get _headers => {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-  };
-
-  // Obtener token de autenticación
-  static Future<String?> _getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_tokenKey);
-  }
-
-  // Headers con autenticación
-  static Future<Map<String, String>> get _authHeaders async {
-    final token = await _getToken();
-    return {..._headers, if (token != null) 'Authorization': 'Bearer $token'};
-  }
-
-  // Obtener datos del usuario actual
-  static Future<Map<String, dynamic>?> getCurrentUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userData = prefs.getString(_userKey);
-    return userData != null ? jsonDecode(userData) : null;
-  }
-
-  // Verificar OTP de registro
-  static Future<Map<String, dynamic>> verifyRegistrationOTP(
-    String email,
-    String codigo,
-  ) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/public/auth/verify-registration-otp'),
-        headers: _headers,
-        body: jsonEncode({
-          'email': email.trim().toLowerCase(),
-          'codigo': codigo,
-          'tipo': 'EMAIL_VERIFICATION',
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {'success': true, 'message': data['message']};
-      } else {
-        final data = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message': data['message'] ?? 'Error verificando código',
-        };
-      }
-    } catch (e) {
-      return {'success': false, 'message': 'Error de conexión: $e'};
-    }
-  }
-
-  // Verificar OTP genérico (login, password recovery, etc.)
-  static Future<Map<String, dynamic>> verifyOTP(
-    String email,
-    String codigo,
-    String tipo,
-  ) async {
-    try {
-      print('🌐 [SERVICE] Verificando OTP - URL: $baseUrl/public/auth/verify-otp');
-      print('🌐 [SERVICE] Datos: email=$email, codigo=$codigo, tipo=$tipo');
-
-      final response = await http.post(
-        Uri.parse('$baseUrl/public/auth/verify-otp'),
-        headers: _headers,
-        body: jsonEncode({
-          'email': email.trim().toLowerCase(),
-          'codigo': codigo,
-          'tipo': tipo,
-        }),
-      );
-
-      print('🌐 [SERVICE] Status Code: ${response.statusCode}');
-      print('🌐 [SERVICE] Response Body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        print('✅ [SERVICE] OTP verificado exitosamente');
-        return {'success': true, 'message': data['message']};
-      } else {
-        final data = jsonDecode(response.body);
-        print('❌ [SERVICE] Error verificando OTP: ${data['message']}');
-        return {
-          'success': false,
-          'message': data['message'] ?? 'Error verificando código',
-        };
-      }
-    } catch (e) {
-      print('❌ [SERVICE] Error de conexión: $e');
-      return {'success': false, 'message': 'Error de conexión: $e'};
-    }
-  }
-
-  // Solicitar recuperación de contraseña
-  static Future<Map<String, dynamic>> forgotPassword(String email) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/public/auth/forgot-password'),
-        headers: _headers,
-        body: jsonEncode({'email': email.trim().toLowerCase()}),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {'success': true, 'message': data['message']};
-      } else {
-        final data = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message': data['message'] ?? 'Error enviando email',
-        };
-      }
-    } catch (e) {
-      return {'success': false, 'message': 'Error de conexión: $e'};
-    }
-  }
-
-  // Verificar OTP de login
-  static Future<Map<String, dynamic>> verifyLoginOTP(
-    String email,
-    String codigo,
-  ) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/public/auth/verify-login-otp'),
-        headers: _headers,
-        body: jsonEncode({
-          'email': email.trim().toLowerCase(),
-          'codigo': codigo,
-          'tipo': 'LOGIN_VERIFICATION',
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-
-        if (data['success'] == true) {
-          // Guardar token y datos del usuario
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString(_tokenKey, data['data']['token']);
-          await prefs.setString(_userKey, jsonEncode(data['data']['user']));
-
-          return {
-            'success': true,
-            'message': data['message'],
-            'user': data['data']['user'],
-            'token': data['data']['token'],
-          };
-        } else {
-          return {
-            'success': false,
-            'message': data['message'] ?? 'Error verificando código',
-          };
-        }
-      } else {
-        final data = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message': data['message'] ?? 'Error verificando código',
-        };
-      }
-    } catch (e) {
-      return {'success': false, 'message': 'Error de conexión: $e'};
-    }
-  }
-
-  // Reenviar OTP
-  static Future<Map<String, dynamic>> resendOTP(
-    String email,
-    String tipo,
-  ) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/public/auth/resend-otp'),
-        headers: _headers,
-        body: jsonEncode({'email': email.trim().toLowerCase(), 'tipo': tipo}),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {'success': true, 'message': data['message']};
-      } else {
-        final data = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message': data['message'] ?? 'Error reenviando código',
-        };
-      }
-    } catch (e) {
-      return {'success': false, 'message': 'Error de conexión: $e'};
-    }
-  }
-
-  // Resetear contraseña
-  static Future<Map<String, dynamic>> resetPassword(
-    String email,
-    String otpCode,
-    String newPassword,
-  ) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/public/auth/reset-password'),
-        headers: _headers,
-        body: jsonEncode({
-          'email': email,
-          'otpCode': otpCode,
-          'newPassword': newPassword,
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data;
-      } else {
-        final errorData = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message': errorData['message'] ?? 'Error al resetear contraseña',
-        };
-      }
-    } catch (e) {
-      return {'success': false, 'message': 'Error de conexión: $e'};
-    }
-  }
-
-  // Obtener perfil del usuario desde el backend
-  static Future<Map<String, dynamic>> getProfile() async {
-    try {
-      final headers = await _authHeaders;
-
-      final response = await http.get(
-        Uri.parse('$baseUrl/owner/profile'),
-        headers: headers,
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data;
-      } else {
-        return {'error': 'Error obteniendo perfil'};
-      }
-    } catch (e) {
-      return {'error': 'Error de conexión: $e'};
-    }
-  }
-
-  // Verificar si el usuario está logueado
-  static Future<bool> isLoggedIn() async {
-    final token = await _getToken();
-    return token != null;
-  }
-
-  // Register
-  static Future<Map<String, dynamic>> register({
-    required String nombre,
-    required String email,
-    required String telefono,
-    required String password,
-    String? codigoPais,
-  }) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/public/auth/register'),
-        headers: _headers,
-        body: jsonEncode({
-          'nombre': nombre,
-          'email': email,
-          'telefono': telefono,
-          'password': password,
-          'confirmPassword': password, // Confirmar la misma contraseña
-          if (codigoPais != null) 'codigoPais': codigoPais,
-        }),
-      );
-
-      if (response.statusCode == 201) {
-        final data = jsonDecode(response.body);
-
-        // Verificar si requiere OTP
-        if (data['data']['requiresOTP'] == true) {
-          return {
-            'success': true,
-            'requiresOTP': true,
-            'email': data['data']['email'],
-            'message': data['message'],
-          };
-        }
-
-        // Acceder a los datos correctos de la respuesta (solo si no requiere OTP)
-        final userData = data['data']['user'];
-        final token = data['data']['token'];
-
-        await _saveToken(token);
-        await saveUserData(userData);
-        return {'success': true, 'user': userData};
-      } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message': error['message'] ?? 'Error en el registro',
-        };
-      }
-    } catch (e) {
-      return {'success': false, 'message': 'Error de conexión: $e'};
-    }
-  }
-
-  // Guardar datos del usuario
-  static Future<void> saveUserData(Map<String, dynamic> userData) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_userKey, jsonEncode(userData));
-  }
-
-  // Limpiar datos del usuario
-  static Future<void> clearUserData() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
-    await prefs.remove(_userKey);
-  }
-
-  /// ===== AUTENTICACIÓN =====
-
-  /// Login híbrido (online/offline)
-  static Future<Map<String, dynamic>> login({
-    required String email,
-    required String password,
-  }) async {
-    try {
-      print('🔐 [FLUTTER] Iniciando login para: $email');
-      print('🌐 [FLUTTER] URL: $baseUrl/public/auth/login');
-
-      // Intentar login online primero
-      final response = await http.post(
-        Uri.parse('$baseUrl/public/auth/login'),
-        headers: _headers,
-        body: jsonEncode({'email': email, 'password': password}),
-      );
-
-      print('📡 [FLUTTER] Respuesta del servidor:');
-      print('   Status Code: ${response.statusCode}');
-      print('   Headers: ${response.headers}');
-      print('   Body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        print('✅ [FLUTTER] Login exitoso, guardando datos...');
-
-        // Verificar si requiere OTP
-        if (data['data']['requiresOTP'] == true) {
-          return {
-            'success': true,
-            'requiresOTP': true,
-            'email': data['data']['email'],
-            'message': data['message'],
-          };
-        }
-
-        // Acceder a los datos correctos de la respuesta (solo si no requiere OTP)
-        final userData = data['data']['user'];
-        final token = data['data']['token'];
-
-        // Guardar datos del usuario
-        await saveUserData(userData);
-        await _saveToken(token);
-
-        // Verificar si el usuario necesita verificación OTP
-        final requiresOTP = !(userData['emailVerificado'] ?? false);
-
-        return {
-          'success': true,
-          'user': userData,
-          'token': token,
-          'message': 'Login exitoso',
-          'online': true,
-          'requiresOTP': requiresOTP,
-        };
-      } else {
-        print('❌ [FLUTTER] Error en login, código: ${response.statusCode}');
-        print('❌ [FLUTTER] Respuesta: ${response.body}');
-
-        // Manejar errores específicos del backend
-        final data = jsonDecode(response.body);
-        final errorMessage = data['message'] ?? 'Error al iniciar sesión';
-
-        print('🔍 [FLUTTER] Error message del backend: $errorMessage');
-        print('🔍 [FLUTTER] Status code: ${response.statusCode}');
-
-        // Si es error de credenciales, no intentar offline
-        if (response.statusCode == 401 || response.statusCode == 400) {
-          print(
-            '🔍 [FLUTTER] Devolviendo error de credenciales: $errorMessage',
-          );
-          return {'success': false, 'error': errorMessage};
-        }
-
-        print('🔍 [FLUTTER] Intentando login offline...');
-        // Solo intentar offline si es error de servidor o conexión
-        return await _loginOffline(email, password);
-      }
-    } catch (e) {
-      print('❌ [FLUTTER] Error de conexión: $e');
-      // Si no hay internet, intentar offline
-      return await _loginOffline(email, password);
-    }
-  }
-
-  /// Login offline
-  static Future<Map<String, dynamic>> _loginOffline(
-    String email,
-    String password,
-  ) async {
-    try {
-      final user = await LocalDatabase.getUsuarioByEmail(email);
-
-      if (user == null) {
-        return {'success': false, 'error': 'Usuario no encontrado'};
-      }
-
-      // Verificar contraseña (simplificado para offline)
-      if (user['password'] != password) {
-        return {'success': false, 'error': 'Contraseña incorrecta'};
-      }
-
-      // Generar token offline (simplificado)
-      final token = 'offline_${DateTime.now().millisecondsSinceEpoch}';
-      await _saveToken(token);
-
-      return {
-        'success': true,
-        'user': user,
-        'token': token,
-        'message': 'Login offline exitoso',
-        'offline': true,
-      };
-    } catch (e) {
-      return {'success': false, 'error': 'Error en login offline: $e'};
-    }
-  }
-
-  /// Guardar token
-  static Future<void> _saveToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, token);
-  }
-
-  /// Logout
-  static Future<Map<String, dynamic>> logout() async {
-    try {
-      await clearUserData();
-      return {'success': true, 'message': 'Logout exitoso'};
-    } catch (e) {
-      return {'success': false, 'error': 'Error al hacer logout: $e'};
-    }
-  }
+  // ========================================
+  // NOTA: Métodos de autenticación (login, logout, perfil)
+  // han sido migrados a AuthService.
+  // Usar AuthService() para esas operaciones.
+  // ========================================
 
   /// ===== GESTIÓN DE EMPLEADOS =====
 
+  /// Crear empleado
   /// Crear empleado
   static Future<Map<String, dynamic>> crearEmpleado({
     required String propietarioId,
@@ -479,22 +21,17 @@ class FeelinPayService {
     String? canal,
   }) async {
     try {
-      final headers = await _authHeaders;
-
-      final response = await http.post(
-        Uri.parse('$baseUrl/empleados'),
-        headers: headers,
-        body: jsonEncode({
+      final response = await ApiService().post<Map<String, dynamic>>(
+        '/empleados',
+        data: {
           'propietarioId': propietarioId,
           'nombre': nombre,
           'telefono': telefono,
           'canal': canal ?? 'sms',
-        }),
+        },
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-
+      if (response.isSuccess && response.data != null) {
         // Guardar empleado localmente
         await LocalDatabase.createEmpleado({
           'propietarioId': propietarioId,
@@ -506,15 +43,11 @@ class FeelinPayService {
 
         return {
           'success': true,
-          'empleado': data['empleado'],
+          'empleado': response.data!['empleado'],
           'message': 'Empleado creado exitosamente',
         };
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error al crear empleado',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -526,19 +59,15 @@ class FeelinPayService {
     String propietarioId,
   ) async {
     try {
-      final headers = await _authHeaders;
-
-      final response = await http.get(
-        Uri.parse('$baseUrl/empleados/propietario/$propietarioId'),
-        headers: headers,
+      final response = await ApiService().get<Map<String, dynamic>>(
+        '/empleados/propietario/$propietarioId',
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+      if (response.isSuccess && response.data != null) {
         return {
           'success': true,
-          'empleados': data['empleados'],
-          'total': data['total'],
+          'empleados': response.data!['empleados'],
+          'total': response.data!['total'],
         };
       } else {
         // Si falla online, obtener offline
@@ -585,12 +114,9 @@ class FeelinPayService {
     bool notificarEmpleados = true,
   }) async {
     try {
-      final headers = await _authHeaders;
-
-      final response = await http.post(
-        Uri.parse('$baseUrl/pago-integrado/procesar-pago'),
-        headers: headers,
-        body: jsonEncode({
+      final response = await ApiService().post<Map<String, dynamic>>(
+        '/pago-integrado/procesar-pago',
+        data: {
           'propietarioId': propietarioId,
           'nombrePagador': nombrePagador,
           'monto': monto,
@@ -598,11 +124,11 @@ class FeelinPayService {
           'fechaPago': fechaPago.toIso8601String(),
           'telefonoPagador': telefonoPagador,
           'notificarEmpleados': notificarEmpleados,
-        }),
+        },
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+      if (response.isSuccess && response.data != null) {
+        final data = response.data!;
 
         // Guardar pago localmente para respaldo
         await _guardarPagoLocalmente({
@@ -688,37 +214,30 @@ class FeelinPayService {
     try {
       await LocalDatabase.createPago(pagoData);
     } catch (e) {
-      print('Error al guardar pago localmente: $e');
+      debugPrint('Error al guardar pago localmente: $e');
     }
   }
 
   /// ===== GOOGLE SHEETS =====
 
   /// Obtener enlace de compartir para empleados
+  /// Obtener enlace de compartir para empleados
   static Future<Map<String, dynamic>> obtenerEnlaceCompartir(
     String propietarioId,
   ) async {
     try {
-      final headers = await _authHeaders;
-
-      final response = await http.get(
-        Uri.parse('$baseUrl/pago-integrado/enlace-compartir/$propietarioId'),
-        headers: headers,
+      final response = await ApiService().get<Map<String, dynamic>>(
+        '/pago-integrado/enlace-compartir/$propietarioId',
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+      if (response.isSuccess && response.data != null) {
         return {
           'success': true,
-          'url': data['url'],
+          'url': response.data!['url'],
           'message': 'Enlace obtenido exitosamente',
         };
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error al obtener enlace',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -728,20 +247,18 @@ class FeelinPayService {
   /// ===== ESTADÍSTICAS =====
 
   /// Obtener estadísticas del propietario
+  /// Obtener estadísticas del propietario
   static Future<Map<String, dynamic>> obtenerEstadisticas(
     String propietarioId,
   ) async {
     try {
       // Intentar obtener online primero
-      final headers = await _authHeaders;
-
-      final response = await http.get(
-        Uri.parse('$baseUrl/pago-integrado/verificar-saldo-sms/$propietarioId'),
-        headers: headers,
+      final response = await ApiService().get<Map<String, dynamic>>(
+        '/pago-integrado/verificar-saldo-sms/$propietarioId',
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+      if (response.isSuccess && response.data != null) {
+        final data = response.data!;
         return {
           'success': true,
           'saldoDisponible': data['saldoDisponible'],
@@ -767,30 +284,24 @@ class FeelinPayService {
   /// ===== SINCRONIZACIÓN =====
 
   /// Sincronizar pagos pendientes
+  /// Sincronizar pagos pendientes
   static Future<Map<String, dynamic>> sincronizarPagosPendientes(
     String propietarioId,
   ) async {
     try {
-      final headers = await _authHeaders;
-
-      final response = await http.post(
-        Uri.parse('$baseUrl/pago-integrado/sincronizar/$propietarioId'),
-        headers: headers,
+      final response = await ApiService().post<Map<String, dynamic>>(
+        '/pago-integrado/sincronizar/$propietarioId',
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+      if (response.isSuccess && response.data != null) {
+        final data = response.data!;
         return {
           'success': true,
           'sincronizados': data['sincronizados'],
           'message': data['message'],
         };
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error al sincronizar',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -800,6 +311,7 @@ class FeelinPayService {
   /// ===== BOTÓN DE PRUEBAS =====
 
   /// Procesar pago de prueba (sin Yape real)
+  /// Procesar pago de prueba (sin Yape real)
   static Future<Map<String, dynamic>> procesarPagoPrueba({
     required String propietarioId,
     String nombrePagador = 'Cliente de Prueba',
@@ -808,21 +320,18 @@ class FeelinPayService {
     String telefonoPagador = '+51987654321',
   }) async {
     try {
-      final headers = await _authHeaders;
-
-      final response = await http.post(
-        Uri.parse('$baseUrl/test/procesar-pago-prueba/$propietarioId'),
-        headers: headers,
-        body: jsonEncode({
+      final response = await ApiService().post<Map<String, dynamic>>(
+        '/test/procesar-pago-prueba/$propietarioId',
+        data: {
           'nombrePagador': nombrePagador,
           'monto': monto,
           'codigoSeguridad': codigoSeguridad,
           'telefonoPagador': telefonoPagador,
-        }),
+        },
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+      if (response.isSuccess && response.data != null) {
+        final data = response.data!;
 
         // Guardar pago localmente para respaldo
         await _guardarPagoLocalmente({
@@ -844,11 +353,7 @@ class FeelinPayService {
           'esPrueba': true,
         };
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error al procesar pago de prueba',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -860,15 +365,12 @@ class FeelinPayService {
     String propietarioId,
   ) async {
     try {
-      final headers = await _authHeaders;
-
-      final response = await http.get(
-        Uri.parse('$baseUrl/test/verificar-boton-prueba/$propietarioId'),
-        headers: headers,
+      final response = await ApiService().get<Map<String, dynamic>>(
+        '/test/verificar-boton-prueba/$propietarioId',
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+      if (response.isSuccess && response.data != null) {
+        final data = response.data!;
         return {
           'success': true,
           'puedeUsar': data['puedeUsar'],
@@ -877,11 +379,7 @@ class FeelinPayService {
           'fechaUso': data['fechaUso'],
         };
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error al verificar botón de prueba',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -891,17 +389,17 @@ class FeelinPayService {
   /// ===== ACCESO DE EMPLEADOS =====
 
   /// Obtener enlace de Google Sheets para empleados (público)
+  /// Obtener enlace de Google Sheets para empleados (público)
   static Future<Map<String, dynamic>> obtenerEnlaceGoogleSheetsEmpleados(
     String propietarioId,
   ) async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/empleado-access/google-sheets/$propietarioId'),
-        headers: _headers,
+      final response = await ApiService().get<Map<String, dynamic>>(
+        '/empleado-access/google-sheets/$propietarioId',
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+      if (response.isSuccess && response.data != null) {
+        final data = response.data!;
         return {
           'success': true,
           'url': data['url'],
@@ -909,11 +407,7 @@ class FeelinPayService {
           'description': data['description'],
         };
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error al obtener enlace',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -925,24 +419,19 @@ class FeelinPayService {
     String empleadoId,
   ) async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/empleado-access/verificar/$empleadoId'),
-        headers: _headers,
+      final response = await ApiService().get<Map<String, dynamic>>(
+        '/empleado-access/verificar/$empleadoId',
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+      if (response.isSuccess && response.data != null) {
+        final data = response.data!;
         return {
           'success': true,
           'acceso': data['acceso'],
           'empleado': data['empleado'],
         };
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error al verificar acceso',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -952,30 +441,24 @@ class FeelinPayService {
   // ==================== MÉTODOS OTP ====================
 
   /// Verificar código OTP
+  /// Verificar código OTP
   static Future<Map<String, dynamic>> verificarCodigoOTP(
     String userId,
     String codigo,
   ) async {
     try {
-      final headers = await _authHeaders;
-      final response = await http.post(
-        Uri.parse('$baseUrl/otp/verificar-codigo'),
-        headers: headers,
-        body: jsonEncode({'usuarioId': userId, 'codigo': codigo}),
+      final response = await ApiService().post<Map<String, dynamic>>(
+        '/otp/verificar-codigo',
+        data: {'usuarioId': userId, 'codigo': codigo},
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'message': data['message'] ?? 'Código verificado correctamente',
-        };
+      if (response.isSuccess) {
+        // Nota: ApiService puede retornar mensaje en data o solo status
+        final message =
+            response.data?['message'] ?? 'Código verificado correctamente';
+        return {'success': true, 'message': message};
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message': error['error'] ?? 'Error verificando código',
-        };
+        return {'success': false, 'message': response.message};
       }
     } catch (e) {
       return {'success': false, 'message': 'Error de conexión: $e'};
@@ -988,25 +471,17 @@ class FeelinPayService {
       // Limpiar email antes de enviar
       final emailLimpio = email.trim().toLowerCase();
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/public/auth/resend-otp'),
-        headers: _headers,
-        body: jsonEncode({'email': emailLimpio, 'tipo': 'EMAIL_VERIFICATION'}),
+      final response = await ApiService().post<Map<String, dynamic>>(
+        '/public/auth/resend-otp',
+        data: {'email': emailLimpio, 'tipo': 'EMAIL_VERIFICATION'},
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'message': data['message'] ?? 'Código reenviado correctamente',
-        };
+      if (response.isSuccess) {
+        final message =
+            response.data?['message'] ?? 'Código reenviado correctamente';
+        return {'success': true, 'message': message};
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message':
-              error['message'] ?? error['error'] ?? 'Error reenviando código',
-        };
+        return {'success': false, 'message': response.message};
       }
     } catch (e) {
       return {'success': false, 'message': 'Error de conexión: $e'};
@@ -1021,80 +496,20 @@ class FeelinPayService {
       // Limpiar email antes de enviar
       final emailLimpio = email.trim().toLowerCase();
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/public/auth/forgot-password'),
-        headers: _headers,
-        body: jsonEncode({'email': emailLimpio}),
+      final response = await ApiService().post<Map<String, dynamic>>(
+        '/public/auth/forgot-password',
+        data: {'email': emailLimpio},
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'message': data['message'] ?? 'Código de recuperación enviado',
-        };
+      if (response.isSuccess) {
+        final message =
+            response.data?['message'] ?? 'Código de recuperación enviado';
+        return {'success': true, 'message': message};
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message':
-              error['message'] ?? error['error'] ?? 'Error enviando código',
-        };
+        return {'success': false, 'message': response.message};
       }
     } catch (e) {
       return {'success': false, 'message': 'Error de conexión: $e'};
-    }
-  }
-
-  /// Cambiar contraseña con código OTP
-  static Future<Map<String, dynamic>> cambiarPasswordConCodigo(
-    String email,
-    String codigo,
-    String nuevaPassword,
-  ) async {
-    try {
-      print('🔍 [FeelinPayService] Iniciando cambiarPasswordConCodigo');
-      print('🔍 [FeelinPayService] Email: $email');
-      print('🔍 [FeelinPayService] Código: $codigo');
-      print('🔍 [FeelinPayService] URL: $baseUrl/auth/reset-password');
-
-      final requestBody = {
-        'email': email.trim().toLowerCase(),
-        'codigo': codigo,
-        'newPassword': nuevaPassword,
-        'confirmPassword': nuevaPassword,
-      };
-
-      print('🔍 [FeelinPayService] Request body: $requestBody');
-
-      final response = await http.post(
-        Uri.parse('$baseUrl/public/auth/reset-password'),
-        headers: _headers,
-        body: jsonEncode(requestBody),
-      );
-
-      print('🔍 [FeelinPayService] Response status: ${response.statusCode}');
-      print('🔍 [FeelinPayService] Response body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'message': data['message'] ?? 'Contraseña cambiada correctamente',
-        };
-      } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error':
-              error['error'] ??
-              error['message'] ??
-              'Error cambiando contraseña',
-        };
-      }
-    } catch (e) {
-      print('🔍 [FeelinPayService] Error en cambiarPasswordConCodigo: $e');
-      return {'success': false, 'error': 'Error de conexión: $e'};
     }
   }
 
@@ -1115,25 +530,20 @@ class FeelinPayService {
         'limite': limite.toString(),
       };
 
-      final uri = Uri.parse(
-        '$baseUrl/admin/usuarios',
-      ).replace(queryParameters: queryParams);
+      final response = await ApiService().get<Map<String, dynamic>>(
+        '/admin/usuarios',
+        queryParameters: queryParams,
+      );
 
-      final response = await http.get(uri, headers: await _authHeaders);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+      if (response.isSuccess && response.data != null) {
+        final data = response.data!;
         return {
           'success': true,
           'usuarios': data['usuarios'],
           'paginacion': data['paginacion'],
         };
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error obteniendo usuarios',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -1148,30 +558,23 @@ class FeelinPayService {
     String rol,
   ) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/admin/usuarios'),
-        headers: await _authHeaders,
-        body: jsonEncode({
+      final response = await ApiService().post<Map<String, dynamic>>(
+        '/admin/usuarios',
+        data: {
           'nombre': nombre,
           'email': email,
           'telefono': telefono,
           'password': password,
           'rol': rol,
-        }),
+        },
       );
 
-      if (response.statusCode == 201) {
-        final data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'message': data['message'] ?? 'Usuario creado correctamente',
-        };
+      if (response.isSuccess) {
+        final message =
+            response.data?['message'] ?? 'Usuario creado correctamente';
+        return {'success': true, 'message': message};
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error creando usuario',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -1180,23 +583,16 @@ class FeelinPayService {
 
   static Future<Map<String, dynamic>> eliminarUsuario(String usuarioId) async {
     try {
-      final response = await http.delete(
-        Uri.parse('$baseUrl/admin/usuarios/$usuarioId'),
-        headers: await _authHeaders,
+      final response = await ApiService().delete<Map<String, dynamic>>(
+        '/admin/usuarios/$usuarioId',
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'message': data['message'] ?? 'Usuario eliminado correctamente',
-        };
+      if (response.isSuccess) {
+        final message =
+            response.data?['message'] ?? 'Usuario eliminado correctamente';
+        return {'success': true, 'message': message};
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error eliminando usuario',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -1205,23 +601,16 @@ class FeelinPayService {
 
   static Future<Map<String, dynamic>> reactivarUsuario(String usuarioId) async {
     try {
-      final response = await http.patch(
-        Uri.parse('$baseUrl/admin/usuarios/$usuarioId/reactivar'),
-        headers: await _authHeaders,
+      final response = await ApiService().patch<Map<String, dynamic>>(
+        '/admin/usuarios/$usuarioId/reactivar',
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'message': data['message'] ?? 'Usuario reactivado correctamente',
-        };
+      if (response.isSuccess) {
+        final message =
+            response.data?['message'] ?? 'Usuario reactivado correctamente';
+        return {'success': true, 'message': message};
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error reactivando usuario',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -1231,20 +620,17 @@ class FeelinPayService {
   // Google Sheets
   static Future<Map<String, dynamic>> obtenerConfiguracionSheets() async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/reportes/sheets-config'),
-        headers: await _authHeaders,
+      final response = await ApiService().get<Map<String, dynamic>>(
+        '/reportes/sheets-config',
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {'success': true, 'configuracion': data['configuracion']};
-      } else {
-        final error = jsonDecode(response.body);
+      if (response.isSuccess && response.data != null) {
         return {
-          'success': false,
-          'error': error['error'] ?? 'Error obteniendo configuración',
+          'success': true,
+          'configuracion': response.data!['configuracion'],
         };
+      } else {
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -1253,20 +639,14 @@ class FeelinPayService {
 
   static Future<Map<String, dynamic>> abrirGoogleSheets() async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/reportes/abrir-sheets'),
-        headers: await _authHeaders,
+      final response = await ApiService().get<Map<String, dynamic>>(
+        '/reportes/abrir-sheets',
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {'success': true, 'url': data['url']};
+      if (response.isSuccess && response.data != null) {
+        return {'success': true, 'url': response.data!['url']};
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error abriendo Google Sheets',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -1275,20 +655,14 @@ class FeelinPayService {
 
   static Future<Map<String, dynamic>> compartirGoogleSheets() async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/reportes/compartir-sheets'),
-        headers: await _authHeaders,
+      final response = await ApiService().get<Map<String, dynamic>>(
+        '/reportes/compartir-sheets',
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {'success': true, 'url': data['url']};
+      if (response.isSuccess && response.data != null) {
+        return {'success': true, 'url': response.data!['url']};
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error obteniendo enlace de compartir',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -1298,20 +672,15 @@ class FeelinPayService {
   // Llenar Google Sheets con datos de prueba
   static Future<Map<String, dynamic>> llenarDatosPrueba() async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/reportes/llenar-datos-prueba'),
-        headers: await _authHeaders,
+      final response = await ApiService().post<Map<String, dynamic>>(
+        '/reportes/llenar-datos-prueba',
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {'success': true, 'message': data['message']};
+      if (response.isSuccess) {
+        final message = response.data?['message'] ?? 'Datos de prueba llenados';
+        return {'success': true, 'message': message};
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error llenando datos de prueba',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -1321,20 +690,16 @@ class FeelinPayService {
   // Crear estructura de Google Sheets
   static Future<Map<String, dynamic>> crearEstructuraSheets() async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/reportes/crear-estructura'),
-        headers: await _authHeaders,
+      final response = await ApiService().post<Map<String, dynamic>>(
+        '/reportes/crear-estructura',
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {'success': true, 'message': data['message']};
+      if (response.isSuccess) {
+        final message =
+            response.data?['message'] ?? 'Estructura creada correctamente';
+        return {'success': true, 'message': message};
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error creando estructura',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -1348,25 +713,21 @@ class FeelinPayService {
     required String codigoSeguridad,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/reportes/llenar-automatico'),
-        headers: await _authHeaders,
-        body: jsonEncode({
+      final response = await ApiService().post<Map<String, dynamic>>(
+        '/reportes/llenar-automatico',
+        data: {
           'pagador': pagador,
           'monto': monto,
           'codigoSeguridad': codigoSeguridad,
-        }),
+        },
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {'success': true, 'message': data['message']};
+      if (response.isSuccess) {
+        final message =
+            response.data?['message'] ?? 'Datos llenados automáticamente';
+        return {'success': true, 'message': message};
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error llenando automáticamente',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -1378,24 +739,17 @@ class FeelinPayService {
   // Actualizar nombre del usuario
   static Future<Map<String, dynamic>> actualizarNombre(String nombre) async {
     try {
-      final response = await http.put(
-        Uri.parse('$baseUrl/profile/profile/name'),
-        headers: await _authHeaders,
-        body: jsonEncode({'nombre': nombre}),
+      final response = await ApiService().put<Map<String, dynamic>>(
+        '/profile/profile/name',
+        data: {'nombre': nombre},
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'message': data['message'] ?? 'Nombre actualizado correctamente',
-        };
+      if (response.isSuccess) {
+        final message =
+            response.data?['message'] ?? 'Nombre actualizado correctamente';
+        return {'success': true, 'message': message};
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error actualizando nombre',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -1407,24 +761,17 @@ class FeelinPayService {
     String telefono,
   ) async {
     try {
-      final response = await http.put(
-        Uri.parse('$baseUrl/profile/profile/phone'),
-        headers: await _authHeaders,
-        body: jsonEncode({'telefono': telefono}),
+      final response = await ApiService().put<Map<String, dynamic>>(
+        '/profile/profile/phone',
+        data: {'telefono': telefono},
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'message': data['message'] ?? 'Teléfono actualizado correctamente',
-        };
+      if (response.isSuccess) {
+        final message =
+            response.data?['message'] ?? 'Teléfono actualizado correctamente';
+        return {'success': true, 'message': message};
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error actualizando teléfono',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -1437,27 +784,20 @@ class FeelinPayService {
     String passwordNueva,
   ) async {
     try {
-      final response = await http.put(
-        Uri.parse('$baseUrl/profile/profile/password'),
-        headers: await _authHeaders,
-        body: jsonEncode({
+      final response = await ApiService().put<Map<String, dynamic>>(
+        '/profile/profile/password',
+        data: {
           'passwordActual': passwordActual,
           'passwordNueva': passwordNueva,
-        }),
+        },
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'message': data['message'] ?? 'Contraseña actualizada correctamente',
-        };
+      if (response.isSuccess) {
+        final message =
+            response.data?['message'] ?? 'Contraseña actualizada correctamente';
+        return {'success': true, 'message': message};
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error cambiando contraseña',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -1469,26 +809,18 @@ class FeelinPayService {
     String nuevoEmail,
   ) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/profile/profile/email/request'),
-        headers: await _authHeaders,
-        body: jsonEncode({'nuevoEmail': nuevoEmail}),
+      final response = await ApiService().post<Map<String, dynamic>>(
+        '/profile/profile/email/request',
+        data: {'nuevoEmail': nuevoEmail},
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'message':
-              data['message'] ??
-              'Código de verificación enviado al nuevo email',
-        };
+      if (response.isSuccess) {
+        final message =
+            response.data?['message'] ??
+            'Código de verificación enviado al nuevo email';
+        return {'success': true, 'message': message};
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error solicitando cambio de email',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -1500,24 +832,17 @@ class FeelinPayService {
     String codigo,
   ) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/profile/profile/email/confirm'),
-        headers: await _authHeaders,
-        body: jsonEncode({'codigo': codigo}),
+      final response = await ApiService().post<Map<String, dynamic>>(
+        '/profile/profile/email/confirm',
+        data: {'codigo': codigo},
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'message': data['message'] ?? 'Email actualizado correctamente',
-        };
+      if (response.isSuccess) {
+        final message =
+            response.data?['message'] ?? 'Email actualizado correctamente';
+        return {'success': true, 'message': message};
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error confirmando cambio de email',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};
@@ -1535,25 +860,20 @@ class FeelinPayService {
         'limite': limite.toString(),
       };
 
-      final uri = Uri.parse(
-        '$baseUrl/profile/profile/history',
-      ).replace(queryParameters: queryParams);
+      final response = await ApiService().get<Map<String, dynamic>>(
+        '/profile/profile/history',
+        queryParameters: queryParams,
+      );
 
-      final response = await http.get(uri, headers: await _authHeaders);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+      if (response.isSuccess && response.data != null) {
+        final data = response.data!;
         return {
           'success': true,
           'historial': data['historial'],
           'paginacion': data['paginacion'],
         };
       } else {
-        final error = jsonDecode(response.body);
-        return {
-          'success': false,
-          'error': error['error'] ?? 'Error obteniendo historial',
-        };
+        return {'success': false, 'error': response.message};
       }
     } catch (e) {
       return {'success': false, 'error': 'Error de conexión: $e'};

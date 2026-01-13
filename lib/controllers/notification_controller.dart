@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import '../services/payment_notification_service.dart';
 import '../services/sms_service.dart';
 import '../database/local_database.dart';
 
 class NotificationController extends ChangeNotifier {
-  List<Map<String, dynamic>> _notificaciones = [];
+  final List<Map<String, dynamic>> _notificaciones = [];
   List<Map<String, dynamic>> _smsPendientes = [];
   bool _isLoading = false;
   String? _errorMessage;
@@ -14,36 +13,8 @@ class NotificationController extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  // Cargar notificaciones
-  Future<void> loadNotificaciones() async {
-    _setLoading(true);
-    _clearError();
-
-    try {
-      _notificaciones =
-          await PaymentNotificationService.getNotificacionesPendientes();
-      notifyListeners();
-    } catch (e) {
-      _setError('Error cargando notificaciones: ${e.toString()}');
-    } finally {
-      _setLoading(false);
-    }
-  }
-
-  // Procesar notificaciones pendientes
-  Future<void> procesarNotificacionesPendientes() async {
-    _setLoading(true);
-    _clearError();
-
-    try {
-      await PaymentNotificationService.procesarNotificacionesPendientes();
-      await loadNotificaciones();
-    } catch (e) {
-      _setError('Error procesando notificaciones: ${e.toString()}');
-    } finally {
-      _setLoading(false);
-    }
-  }
+  // Bridge Mode: Las notificaciones ahora se manejan automáticamente via PaymentNotificationService
+  // No necesitamos exponer métodos manuales para cargar notificaciones pendientes en el UI
 
   // Cargar SMS pendientes
   Future<void> loadSMSPendientes() async {

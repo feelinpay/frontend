@@ -53,7 +53,7 @@ class _PhoneFieldWidgetState extends State<PhoneFieldWidget> {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: Colors.black.withValues(alpha: 0.15),
               spreadRadius: 0,
               blurRadius: 30,
               offset: const Offset(0, -8),
@@ -141,13 +141,13 @@ class _PhoneFieldWidgetState extends State<PhoneFieldWidget> {
             ),
             decoration: BoxDecoration(
               border: Border.all(
-                color: DesignSystem.textTertiary.withOpacity(0.3),
+                color: DesignSystem.textTertiary.withValues(alpha: 0.3),
                 width: 1,
               ),
               borderRadius: BorderRadius.circular(DesignSystem.radiusM),
               color: widget.enabled 
                   ? DesignSystem.surfaceColor 
-                  : DesignSystem.textTertiary.withOpacity(0.1),
+                  : DesignSystem.textTertiary.withValues(alpha: 0.1),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -215,13 +215,13 @@ class _PhoneFieldWidgetState extends State<PhoneFieldWidget> {
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(DesignSystem.radiusM),
                 borderSide: BorderSide(
-                  color: DesignSystem.textTertiary.withOpacity(0.3),
+                  color: DesignSystem.textTertiary.withValues(alpha: 0.3),
                 ),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(DesignSystem.radiusM),
                 borderSide: BorderSide(
-                  color: DesignSystem.textTertiary.withOpacity(0.3),
+                  color: DesignSystem.textTertiary.withValues(alpha: 0.3),
                 ),
               ),
               focusedBorder: OutlineInputBorder(
@@ -247,7 +247,7 @@ class _PhoneFieldWidgetState extends State<PhoneFieldWidget> {
               filled: true,
               fillColor: widget.enabled 
                   ? DesignSystem.surfaceColor 
-                  : DesignSystem.textTertiary.withOpacity(0.05),
+                  : DesignSystem.textTertiary.withValues(alpha: 0.05),
             ),
             validator: widget.validator,
           ),

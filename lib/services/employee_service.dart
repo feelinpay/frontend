@@ -21,10 +21,7 @@ class EmployeeService {
     String? search,
     bool? activo,
   }) async {
-    final queryParams = <String, dynamic>{
-      'page': page,
-      'limit': limit,
-    };
+    final queryParams = <String, dynamic>{'page': page, 'limit': limit};
 
     if (search != null && search.isNotEmpty) {
       queryParams['search'] = search;
@@ -41,7 +38,7 @@ class EmployeeService {
 
     if (response.isSuccess && response.data != null) {
       final data = response.data!;
-      
+
       // El backend devuelve: { "empleados": [...], "pagination": {...} }
       List<dynamic> employeesList;
       if (data['empleados'] != null) {
@@ -60,7 +57,7 @@ class EmployeeService {
         // Si no hay empleados, lista vacía
         employeesList = [];
       }
-      
+
       final employees = employeesList
           .map((json) => EmployeeModel.fromJson(json as Map<String, dynamic>))
           .toList();
@@ -81,7 +78,9 @@ class EmployeeService {
   }
 
   /// Obtener empleado específico por ID
-  Future<api_models.ApiResponse<EmployeeModel>> getEmployee(String employeeId) async {
+  Future<api_models.ApiResponse<EmployeeModel>> getEmployee(
+    String employeeId,
+  ) async {
     final response = await _apiService.get<Map<String, dynamic>>(
       '${AppConfig.ownerEndpoint}/employees/$employeeId',
     );
@@ -140,10 +139,7 @@ class EmployeeService {
   }) async {
     final response = await _apiService.put<Map<String, dynamic>>(
       '${AppConfig.ownerEndpoint}/employees/$employeeId',
-      data: {
-        'nombre': nombre,
-        'telefono': telefono,
-      },
+      data: {'nombre': nombre, 'telefono': telefono},
     );
 
     if (response.isSuccess && response.data != null) {
@@ -163,7 +159,9 @@ class EmployeeService {
   }
 
   /// Activar/Desactivar empleado
-  Future<api_models.ApiResponse<EmployeeModel>> toggleEmployeeStatus(String employeeId) async {
+  Future<api_models.ApiResponse<EmployeeModel>> toggleEmployeeStatus(
+    String employeeId,
+  ) async {
     final response = await _apiService.patch<Map<String, dynamic>>(
       '${AppConfig.ownerEndpoint}/employees/$employeeId/toggle',
     );
@@ -206,16 +204,12 @@ class EmployeeService {
   }) async {
     final response = await _apiService.get<Map<String, dynamic>>(
       '${AppConfig.ownerEndpoint}/employees/search',
-      queryParameters: {
-        'q': query,
-        'page': page,
-        'limit': limit,
-      },
+      queryParameters: {'q': query, 'page': page, 'limit': limit},
     );
 
     if (response.isSuccess && response.data != null) {
       final data = response.data!;
-      
+
       // El backend puede devolver los empleados en diferentes formatos
       List<dynamic> employeesList;
       if (data['employees'] != null) {
@@ -225,7 +219,7 @@ class EmployeeService {
       } else {
         employeesList = [];
       }
-      
+
       final employees = employeesList
           .map((json) => EmployeeModel.fromJson(json as Map<String, dynamic>))
           .toList();
@@ -273,7 +267,8 @@ class EmployeeService {
 
   /// Obtener configuración de notificaciones de empleados
   /// Las notificaciones se manejan a través del campo 'activo' de cada empleado
-  Future<api_models.ApiResponse<List<EmployeeModel>>> getNotificationConfigs() async {
+  Future<api_models.ApiResponse<List<EmployeeModel>>>
+  getNotificationConfigs() async {
     // Simplemente devolver los empleados ya que las notificaciones están en el campo 'activo'
     return await getEmployees();
   }
@@ -285,9 +280,7 @@ class EmployeeService {
   }) async {
     final response = await _apiService.put<Map<String, dynamic>>(
       '/owner/employees/$employeeId',
-      data: {
-        'activo': notificacionesActivas,
-      },
+      data: {'activo': notificacionesActivas},
     );
 
     if (response.isSuccess && response.data != null) {
@@ -307,11 +300,13 @@ class EmployeeService {
   }
 
   /// Activar/Desactivar notificaciones para todos los empleados
-  Future<api_models.ApiResponse<void>> toggleAllNotifications(bool activar) async {
+  Future<api_models.ApiResponse<void>> toggleAllNotifications(
+    bool activar,
+  ) async {
     try {
       // Obtener todos los empleados
       final employeesResponse = await getEmployees();
-      
+
       if (!employeesResponse.isSuccess || employeesResponse.data == null) {
         return api_models.ApiResponse<void>(
           success: false,
@@ -320,27 +315,31 @@ class EmployeeService {
       }
 
       final employees = employeesResponse.data!;
-      
+
       // Crear lista de futuros para ejecutar en paralelo
-      final futures = employees.map((employee) => 
-        updateNotificationConfig(
-          employeeId: employee.id,
-          notificacionesActivas: activar,
-        )
-      ).toList();
+      final futures = employees
+          .map(
+            (employee) => updateNotificationConfig(
+              employeeId: employee.id,
+              notificacionesActivas: activar,
+            ),
+          )
+          .toList();
 
       // Ejecutar todas las actualizaciones en paralelo
       final results = await Future.wait(futures);
-      
+
       // Verificar si alguna falló
-      final failedUpdates = results.where((result) => !result.isSuccess).toList();
-      
+      final failedUpdates = results
+          .where((result) => !result.isSuccess)
+          .toList();
+
       if (failedUpdates.isNotEmpty) {
         final failedNames = employees
             .where((emp) => results[employees.indexOf(emp)].isSuccess == false)
             .map((emp) => emp.nombre)
             .join(', ');
-        
+
         return api_models.ApiResponse<void>(
           success: false,
           message: 'Error actualizando empleados: $failedNames',
@@ -349,8 +348,8 @@ class EmployeeService {
 
       return api_models.ApiResponse<void>(
         success: true,
-        message: activar 
-            ? 'Notificaciones activadas para todos los empleados' 
+        message: activar
+            ? 'Notificaciones activadas para todos los empleados'
             : 'Notificaciones desactivadas para todos los empleados',
       );
     } catch (e) {
@@ -359,6 +358,127 @@ class EmployeeService {
         message: 'Error actualizando notificaciones: ${e.toString()}',
       );
     }
+  }
+  // ========================================
+  // GESTIÓN DE HORARIOS LABORALES
+  // ========================================
+
+  /// Obtener horarios laborales de un empleado
+  Future<api_models.ApiResponse<List<Map<String, dynamic>>>> getWorkSchedules(
+    String employeeId,
+  ) async {
+    final response = await _apiService.get<Map<String, dynamic>>(
+      '${AppConfig.ownerEndpoint}/employees/$employeeId/horarios-laborales',
+    );
+
+    if (response.isSuccess && response.data != null) {
+      final data = response.data!;
+      List<dynamic> schedulesList = [];
+
+      if (data['horarios'] != null) {
+        schedulesList = data['horarios'] as List<dynamic>;
+      } else if (data['data'] != null) {
+        schedulesList = data['data'] as List<dynamic>;
+      }
+
+      return api_models.ApiResponse<List<Map<String, dynamic>>>(
+        success: true,
+        message: response.message,
+        data: schedulesList.map((e) => e as Map<String, dynamic>).toList(),
+      );
+    }
+
+    return api_models.ApiResponse<List<Map<String, dynamic>>>(
+      success: false,
+      message: response.message,
+      errors: response.errors,
+      statusCode: response.statusCode,
+    );
+  }
+
+  /// Crear horario laboral
+  Future<api_models.ApiResponse<Map<String, dynamic>>> createWorkSchedule({
+    required String employeeId,
+    required String diaSemana,
+    required String horaInicio,
+    required String horaFin,
+    bool activo = true,
+  }) async {
+    final response = await _apiService.post<Map<String, dynamic>>(
+      '${AppConfig.ownerEndpoint}/employees/$employeeId/horarios-laborales',
+      data: {
+        'diaSemana': diaSemana,
+        'horaInicio': horaInicio,
+        'horaFin': horaFin,
+        'activo': activo,
+      },
+    );
+
+    if (response.isSuccess && response.data != null) {
+      return api_models.ApiResponse<Map<String, dynamic>>(
+        success: true,
+        message: response.message,
+        data: response.data!,
+      );
+    }
+
+    return api_models.ApiResponse<Map<String, dynamic>>(
+      success: false,
+      message: response.message,
+      errors: response.errors,
+      statusCode: response.statusCode,
+    );
+  }
+
+  /// Actualizar horario laboral
+  Future<api_models.ApiResponse<Map<String, dynamic>>> updateWorkSchedule({
+    required String employeeId,
+    required String scheduleId,
+    String? horaInicio,
+    String? horaFin,
+    bool? activo,
+  }) async {
+    final data = <String, dynamic>{};
+    if (horaInicio != null) data['horaInicio'] = horaInicio;
+    if (horaFin != null) data['horaFin'] = horaFin;
+    if (activo != null) data['activo'] = activo;
+
+    final response = await _apiService.put<Map<String, dynamic>>(
+      '${AppConfig.ownerEndpoint}/employees/$employeeId/horarios-laborales/$scheduleId',
+      data: data,
+    );
+
+    if (response.isSuccess && response.data != null) {
+      return api_models.ApiResponse<Map<String, dynamic>>(
+        success: true,
+        message: response.message,
+        data: response.data!,
+      );
+    }
+
+    return api_models.ApiResponse<Map<String, dynamic>>(
+      success: false,
+      message: response.message,
+      errors: response.errors,
+      statusCode: response.statusCode,
+    );
+  }
+
+  /// Eliminar horario laboral
+  Future<api_models.ApiResponse<void>> deleteWorkSchedule(
+    String employeeId,
+    String scheduleId,
+  ) async {
+    final response = await _apiService.delete<Map<String, dynamic>>(
+      '${AppConfig.ownerEndpoint}/employees/$employeeId/horarios-laborales/$scheduleId',
+    );
+
+    return api_models.ApiResponse<void>(
+      success: response.isSuccess,
+      message: response.message,
+      errors: response.errors,
+      statusCode: response.statusCode,
+    );
   }
 }
 
@@ -425,10 +545,15 @@ class NotificationConfig {
     return NotificationConfig(
       id: json['id'] ?? '',
       empleadoId: json['empleadoId'] ?? '',
-      empleadoNombre: json['empleadoNombre'] ?? json['empleado']?['nombre'] ?? '',
+      empleadoNombre:
+          json['empleadoNombre'] ?? json['empleado']?['nombre'] ?? '',
       notificacionesActivas: json['notificacionesActivas'] ?? false,
-      createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
-      updatedAt: DateTime.parse(json['updatedAt'] ?? DateTime.now().toIso8601String()),
+      createdAt: DateTime.parse(
+        json['createdAt'] ?? DateTime.now().toIso8601String(),
+      ),
+      updatedAt: DateTime.parse(
+        json['updatedAt'] ?? DateTime.now().toIso8601String(),
+      ),
     );
   }
 

@@ -1,3 +1,7 @@
+import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // NEW
 import '../models/user_model.dart';
 import '../models/api_response.dart' as api_models;
 import 'api_service.dart';
@@ -8,6 +12,12 @@ class AuthService {
   AuthService._internal();
 
   final ApiService _apiService = ApiService();
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    // Client ID web para obtener el idToken para el backend
+    // Este debe coincidir con el client_id de tipo 3 en google-services.json
+    serverClientId:
+        '136817731846-smurvc37qgut87sco3k4lv7ggfdi4fcu.apps.googleusercontent.com',
+  );
 
   // ========================================
   // REGISTRO DE USUARIO
@@ -56,11 +66,7 @@ class AuthService {
   }) async {
     final response = await _apiService.post<Map<String, dynamic>>(
       '/public/auth/verify-otp',
-      data: {
-        'email': email,
-        'codigo': codigo,
-        'tipo': 'EMAIL_VERIFICATION',
-      },
+      data: {'email': email, 'codigo': codigo, 'tipo': 'EMAIL_VERIFICATION'},
       requireAuth: false,
     );
 
@@ -70,6 +76,114 @@ class AuthService {
       errors: response.errors,
       statusCode: response.statusCode,
     );
+  }
+
+  // ========================================
+  // LOGIN CON GOOGLE
+  // ========================================
+
+  /// Iniciar sesión con Google
+  Future<api_models.ApiResponse<UserModel>> signInWithGoogle() async {
+    try {
+      // 0. Forzar cierre de sesión previo para permitir selección de cuenta (Debug)
+      await _googleSignIn.signOut();
+
+      // 1. Autenticar con Google
+      final GoogleSignInAccount? account = await _googleSignIn.signIn();
+
+      if (account == null) {
+        return api_models.ApiResponse<UserModel>(
+          success: false,
+          message: 'Inicio de sesión cancelado',
+          statusCode: 400,
+        );
+      }
+
+      // 2. Obtener token de autenticación
+      final GoogleSignInAuthentication auth = await account.authentication;
+      final String? idToken = auth.idToken;
+      final String? accessToken = auth.accessToken;
+
+      if (idToken == null) {
+        return api_models.ApiResponse<UserModel>(
+          success: false,
+          message: 'No se pudo obtener el token de Google',
+          statusCode: 500,
+        );
+      }
+
+      // 3. Enviar token al backend para autenticación
+      // Enviamos múltiples variantes del nombre del campo y datos extra
+      final response = await _apiService.post<Map<String, dynamic>>(
+        '/auth/google',
+        data: {
+          // Tokens
+          'idToken': idToken,
+          'token': idToken,
+          'id_token': idToken,
+          'googleToken': idToken,
+          'accessToken': accessToken,
+          'access_token': accessToken,
+
+          // Información del perfil (por si el backend la necesita)
+          'email': account.email,
+          'name': account.displayName,
+          'photoUrl': account.photoUrl,
+          'id': account.id,
+        },
+        requireAuth: false,
+      );
+
+      if (response.isSuccess && response.data != null) {
+        // Save token if present
+        if (response.data!['token'] != null) {
+          final token = response.data!['token'];
+          await _apiService.setAuthToken(token);
+
+          String? userId;
+          if (response.data!['user'] != null &&
+              response.data!['user']['id'] != null) {
+            userId = response.data!['user']['id'].toString();
+          } else if (response.data!['id'] != null) {
+            userId = response.data!['id'].toString();
+          }
+
+          if (userId != null) {
+            await _saveAuthDataToPrefs(token, userId);
+          }
+        }
+
+        return api_models.ApiResponse<UserModel>(
+          success: true,
+          message: 'Login exitoso',
+          data: UserModel.fromJson(response.data!['user'] ?? response.data!),
+          statusCode: response.statusCode,
+        );
+      }
+
+      return api_models.ApiResponse<UserModel>(
+        success: false,
+        message: response.message,
+        errors: response.errors,
+        statusCode: response.statusCode,
+      );
+    } catch (error) {
+      debugPrint('❌ [AUTH SERVICE] Error detallado Google Sign In: $error');
+      if (error is PlatformException) {
+        debugPrint('❌ [AUTH SERVICE] PlatformException Code: ${error.code}');
+        debugPrint(
+          '❌ [AUTH SERVICE] PlatformException Message: ${error.message}',
+        );
+        debugPrint(
+          '❌ [AUTH SERVICE] PlatformException Details: ${error.details}',
+        );
+      }
+      return api_models.ApiResponse<UserModel>(
+        success: false,
+        message: 'Error iniciando sesión con Google: $error',
+        statusCode: 500,
+      );
+    }
   }
 
   // ========================================
@@ -83,16 +197,13 @@ class AuthService {
   }) async {
     final response = await _apiService.post<Map<String, dynamic>>(
       '/public/auth/login',
-      data: {
-        'email': email,
-        'password': password,
-      },
+      data: {'email': email, 'password': password},
       requireAuth: false,
     );
 
     if (response.isSuccess && response.data != null) {
       final data = response.data!;
-      
+
       // Verificar si requiere OTP
       if (data['requiresOTP'] == true) {
         return api_models.ApiResponse<LoginResponse>(
@@ -106,11 +217,19 @@ class AuthService {
           ),
         );
       }
-      
+
       // Login exitoso con token
       if (data['token'] != null) {
         await _apiService.setAuthToken(data['token']);
-        
+
+        // Persist for background service
+        if (data['user'] != null && data['user']['id'] != null) {
+          await _saveAuthDataToPrefs(
+            data['token'],
+            data['user']['id'].toString(),
+          );
+        }
+
         return api_models.ApiResponse<LoginResponse>(
           success: true,
           message: response.message,
@@ -118,7 +237,9 @@ class AuthService {
             requiresOTP: false,
             email: data['email'],
             token: data['token'],
-            user: data['user'] != null ? UserModel.fromJson(data['user'] as Map<String, dynamic>) : null,
+            user: data['user'] != null
+                ? UserModel.fromJson(data['user'] as Map<String, dynamic>)
+                : null,
           ),
         );
       }
@@ -139,20 +260,24 @@ class AuthService {
   }) async {
     final response = await _apiService.post<Map<String, dynamic>>(
       '/public/auth/verify-otp',
-      data: {
-        'email': email,
-        'codigo': codigo,
-        'tipo': 'LOGIN_VERIFICATION',
-      },
+      data: {'email': email, 'codigo': codigo, 'tipo': 'LOGIN_VERIFICATION'},
       requireAuth: false,
     );
 
     if (response.isSuccess && response.data != null) {
       final data = response.data!;
-      
+
       if (data['token'] != null) {
         await _apiService.setAuthToken(data['token']);
-        
+
+        // Persist for background service
+        if (data['user'] != null && data['user']['id'] != null) {
+          await _saveAuthDataToPrefs(
+            data['token'],
+            data['user']['id'].toString(),
+          );
+        }
+
         return api_models.ApiResponse<LoginResponse>(
           success: true,
           message: response.message,
@@ -160,7 +285,9 @@ class AuthService {
             requiresOTP: false,
             email: data['email'],
             token: data['token'],
-            user: data['user'] != null ? UserModel.fromJson(data['user'] as Map<String, dynamic>) : null,
+            user: data['user'] != null
+                ? UserModel.fromJson(data['user'] as Map<String, dynamic>)
+                : null,
           ),
         );
       }
@@ -181,10 +308,7 @@ class AuthService {
   }) async {
     final response = await _apiService.post<Map<String, dynamic>>(
       '/public/auth/resend-otp',
-      data: {
-        'email': email,
-        'tipo': tipo,
-      },
+      data: {'email': email, 'tipo': tipo},
       requireAuth: false,
     );
 
@@ -206,9 +330,7 @@ class AuthService {
   }) async {
     final response = await _apiService.post<Map<String, dynamic>>(
       '/public/auth/forgot-password',
-      data: {
-        'email': email,
-      },
+      data: {'email': email},
       requireAuth: false,
     );
 
@@ -252,14 +374,12 @@ class AuthService {
 
   /// Obtener perfil del usuario actual
   Future<api_models.ApiResponse<UserModel>> getProfile() async {
-    final response = await _apiService.get<Map<String, dynamic>>(
-      '/owner/profile',
-    );
+    final response = await _apiService.get<Map<String, dynamic>>('/auth/me');
 
     if (response.isSuccess && response.data != null) {
-      print('🔍 [AUTH SERVICE] Datos del perfil recibidos del backend:');
-      print('🔍 [AUTH SERVICE] ${response.data}');
-      
+      debugPrint('🔍 [AUTH SERVICE] Datos del perfil recibidos del backend:');
+      debugPrint('🔍 [AUTH SERVICE] ${response.data}');
+
       return api_models.ApiResponse<UserModel>(
         success: true,
         message: response.message,
@@ -281,11 +401,8 @@ class AuthService {
     required String telefono,
   }) async {
     final response = await _apiService.put<Map<String, dynamic>>(
-      '/owner/profile',
-      data: {
-        'nombre': nombre,
-        'telefono': telefono,
-      },
+      '/auth/profile', // Standardizing to /auth/profile
+      data: {'nombre': nombre, 'telefono': telefono},
     );
 
     if (response.isSuccess && response.data != null) {
@@ -311,7 +428,7 @@ class AuthService {
     required String confirmPassword,
   }) async {
     final response = await _apiService.patch<Map<String, dynamic>>(
-      '/owner/profile/password',
+      '/auth/password',
       data: {
         'currentPassword': currentPassword,
         'newPassword': newPassword,
@@ -333,9 +450,7 @@ class AuthService {
   }) async {
     final response = await _apiService.post<Map<String, dynamic>>(
       '/owner/profile/profile/email/request',
-      data: {
-        'newEmail': newEmail,
-      },
+      data: {'newEmail': newEmail},
     );
 
     return api_models.ApiResponse<void>(
@@ -353,10 +468,7 @@ class AuthService {
   }) async {
     final response = await _apiService.post<Map<String, dynamic>>(
       '/owner/profile/profile/email/confirm',
-      data: {
-        'newEmail': newEmail,
-        'codigo': codigo,
-      },
+      data: {'newEmail': newEmail, 'codigo': codigo},
     );
 
     return api_models.ApiResponse<void>(
@@ -374,10 +486,7 @@ class AuthService {
   }) async {
     final response = await _apiService.post<Map<String, dynamic>>(
       '/owner/profile/verify-email',
-      data: {
-        'newEmail': newEmail,
-        'codigo': codigo,
-      },
+      data: {'newEmail': newEmail, 'codigo': codigo},
     );
 
     return api_models.ApiResponse<void>(
@@ -412,9 +521,21 @@ class AuthService {
         return user.rol == 'super_admin';
       }
     } catch (e) {
-      print('Error checking super admin status: $e');
+      debugPrint('Error checking super admin status: $e');
     }
     return false;
+  }
+
+  // Helper to save auth data for Background Service (SharedPreferences)
+  Future<void> _saveAuthDataToPrefs(String token, String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('bg_auth_token', token);
+      await prefs.setString('bg_user_id', userId);
+      debugPrint('Auth data saved to SharedPreferences for Background Service');
+    } catch (e) {
+      debugPrint('Error saving auth data to prefs: $e');
+    }
   }
 }
 
@@ -429,12 +550,7 @@ class LoginResponse {
   final String? token;
   final UserModel? user;
 
-  LoginResponse({
-    required this.requiresOTP,
-    this.email,
-    this.token,
-    this.user,
-  });
+  LoginResponse({required this.requiresOTP, this.email, this.token, this.user});
 
   /// Verificar si el login fue exitoso
   bool get isSuccessful => !requiresOTP && token != null;

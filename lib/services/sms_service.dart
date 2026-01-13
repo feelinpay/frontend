@@ -1,11 +1,10 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:flutter/material.dart'; // For TimeOfDay
+import 'employee_service.dart';
+
 import '../database/local_database.dart';
-import '../core/config/app_config.dart';
+import 'api_service.dart';
 
 class SMSService {
-  static String get _baseUrl => AppConfig.apiBaseUrl;
-
   // Enviar SMS a empleados sobre nuevo pago
   static Future<Map<String, dynamic>> enviarSMSAPago({
     required String empleadoId,
@@ -24,21 +23,20 @@ class SMSService {
       });
 
       // Intentar envío real de SMS
-      final response = await http.post(
-        Uri.parse('$_baseUrl/sms/enviar'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
+      final response = await ApiService().post<Map<String, dynamic>>(
+        '/sms/enviar',
+        data: {
           'numero': numeroDestino,
           'mensaje': mensaje,
           'empleadoId': empleadoId,
           'pagoId': pagoId,
-        }),
+        },
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+      if (response.isSuccess) {
+        final data = response.data!;
 
-        if (data['success']) {
+        if (data['success'] == true) {
           // Marcar SMS como enviado
           await LocalDatabase.marcarSMSEnviado(smsId);
 
@@ -57,12 +55,12 @@ class SMSService {
         // Marcar SMS con error
         await LocalDatabase.marcarSMSEnviado(
           smsId,
-          error: 'Error HTTP: ${response.statusCode}',
+          error: 'Error HTTP: ${response.message}',
         );
 
         return {
           'success': false,
-          'error': 'Error HTTP: ${response.statusCode}',
+          'error': 'Error HTTP: ${response.message}',
           'smsId': smsId,
         };
       }
@@ -90,7 +88,22 @@ class SMSService {
       int errores = 0;
       final List<String> erroresDetalle = [];
 
+      final employeeService = EmployeeService();
+      final now = DateTime.now();
+      final dayName = _getDayName(now.weekday);
+      final currentTime = TimeOfDay.fromDateTime(now);
+
       for (var empleado in empleados) {
+        // Verificar restricciones (Activo + Horario)
+        final shouldSend = await _shouldSendToEmployee(
+          empleado,
+          employeeService,
+          dayName,
+          currentTime,
+        );
+
+        if (!shouldSend) continue;
+
         final numeroCompleto =
             '${empleado['paisCodigo']}${empleado['telefono']}';
 
@@ -122,6 +135,8 @@ class SMSService {
     }
   }
 
+  // ... (existing helper methods in SMSService if any)
+
   // Enviar SMS de confirmación de pago
   static Future<Map<String, dynamic>> enviarConfirmacionPago({
     required String propietarioId,
@@ -150,7 +165,64 @@ class SMSService {
       int errores = 0;
       final List<String> erroresDetalle = [];
 
+      final employeeService = EmployeeService();
+      final now = DateTime.now();
+      final dayName = _getDayName(now.weekday);
+      final currentTime = TimeOfDay.fromDateTime(now);
+
       for (var empleado in empleados) {
+        // Verificar si el empleado tiene notificaciones activas
+        if (empleado['activo'] != true && empleado['activo'] != 1) {
+          // Check for boolean or int (1)
+          // Notificaciones desactivadas para este empleado
+          continue;
+        }
+
+        // Verificar horario laboral
+        try {
+          // Obtener horarios del empleado
+          final schedulesResponse = await employeeService.getWorkSchedules(
+            empleado['id'],
+          );
+
+          bool canSend = false;
+
+          if (schedulesResponse.isSuccess && schedulesResponse.data != null) {
+            final schedules = schedulesResponse.data!;
+
+            // Buscar todos los horarios de hoy (Soporte horario partido)
+            final todaySchedules = schedules
+                .where((s) => s['diaSemana'] == dayName && s['activo'] == true)
+                .toList();
+
+            if (todaySchedules.isNotEmpty) {
+              for (var schedule in todaySchedules) {
+                final start = _parseTime(schedule['horaInicio']);
+                final end = _parseTime(schedule['horaFin']);
+
+                if (_isTimeBetween(currentTime, start, end)) {
+                  canSend = true;
+                  break; // Ya encontramos un horario válido
+                }
+              }
+            }
+          } else {
+            // Si no hay horarios definidos o falla, ¿enviamos por defecto?
+            // El usuario dijo "Solo en horarios de trabajo pueden estar activo"
+            // Asumimos False por defecto si no hay horario explícito.
+            canSend = false;
+          }
+
+          if (!canSend) {
+            // Saltar este empleado
+            continue;
+          }
+        } catch (e) {
+          // Log removed
+          // Ante error, mejor no enviar para cumplir restricción estricta
+          continue;
+        }
+
         final numeroCompleto =
             '${empleado['paisCodigo']}${empleado['telefono']}';
 
@@ -175,7 +247,7 @@ class SMSService {
         'errores': errores,
         'total': empleados.length,
         'erroresDetalle': erroresDetalle,
-        'message': 'Confirmaciones enviadas: $enviados/$empleados.length',
+        'message': 'Confirmaciones enviadas: $enviados (Filtrados por horario)',
       };
     } catch (e) {
       return {
@@ -185,55 +257,54 @@ class SMSService {
     }
   }
 
+  static String _getDayName(int weekday) {
+    switch (weekday) {
+      case 1:
+        return 'Lunes';
+      case 2:
+        return 'Martes';
+      case 3:
+        return 'Miércoles';
+      case 4:
+        return 'Jueves';
+      case 5:
+        return 'Viernes';
+      case 6:
+        return 'Sábado';
+      case 7:
+        return 'Domingo';
+      default:
+        return 'Lunes';
+    }
+  }
+
+  static TimeOfDay _parseTime(String timeStr) {
+    try {
+      final parts = timeStr.split(':');
+      return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    } catch (e) {
+      return const TimeOfDay(hour: 0, minute: 0);
+    }
+  }
+
+  static bool _isTimeBetween(
+    TimeOfDay current,
+    TimeOfDay start,
+    TimeOfDay end,
+  ) {
+    final nowMinutes = current.hour * 60 + current.minute;
+    final startMinutes = start.hour * 60 + start.minute;
+    final endMinutes = end.hour * 60 + end.minute;
+
+    return nowMinutes >= startMinutes && nowMinutes <= endMinutes;
+  }
+
   // Obtener estadísticas de SMS
   static Future<Map<String, dynamic>> getEstadisticasSMS(
     String propietarioId,
   ) async {
     try {
-      final db = await LocalDatabase.database;
-
-      // SMS enviados hoy
-      final hoy = DateTime.now();
-      final inicioHoy = DateTime(hoy.year, hoy.month, hoy.day);
-      final finHoy = DateTime(hoy.year, hoy.month, hoy.day, 23, 59, 59);
-
-      final smsHoy = await db.rawQuery(
-        '''
-        SELECT COUNT(*) as count
-        FROM sms_enviados se
-        JOIN empleados e ON se.empleadoId = e.id
-        WHERE e.propietarioId = ? AND se.enviado = 1 AND se.fechaEnvio BETWEEN ? AND ?
-      ''',
-        [propietarioId, inicioHoy.toIso8601String(), finHoy.toIso8601String()],
-      );
-
-      // Total de SMS enviados
-      final smsTotal = await db.rawQuery(
-        '''
-        SELECT COUNT(*) as count
-        FROM sms_enviados se
-        JOIN empleados e ON se.empleadoId = e.id
-        WHERE e.propietarioId = ? AND se.enviado = 1
-      ''',
-        [propietarioId],
-      );
-
-      // SMS pendientes
-      final smsPendientes = await db.rawQuery(
-        '''
-        SELECT COUNT(*) as count
-        FROM sms_enviados se
-        JOIN empleados e ON se.empleadoId = e.id
-        WHERE e.propietarioId = ? AND se.enviado = 0
-      ''',
-        [propietarioId],
-      );
-
-      return {
-        'smsHoy': smsHoy.first['count'] ?? 0,
-        'smsTotal': smsTotal.first['count'] ?? 0,
-        'smsPendientes': smsPendientes.first['count'] ?? 0,
-      };
+      return await LocalDatabase.getEstadisticasSMS(propietarioId);
     } catch (e) {
       return {
         'success': false,
@@ -246,35 +317,68 @@ class SMSService {
   static Future<void> procesarSMSPendientes() async {
     try {
       await LocalDatabase.enviarSMSPendientes();
-      print('✅ SMS pendientes procesados');
-    } catch (e) {
-      print('❌ Error procesando SMS pendientes: $e');
+      // Logs removed
+    } catch (_) {
+      // Error ignored for optimization
     }
   }
 
   // Verificar estado de SMS
   static Future<Map<String, dynamic>> verificarEstadoSMS(String smsId) async {
     try {
-      final db = await LocalDatabase.database;
-      final result = await db.query(
-        'sms_enviados',
-        where: 'id = ?',
-        whereArgs: [smsId],
-      );
-
-      if (result.isNotEmpty) {
-        final sms = result.first;
-        return {
-          'success': true,
-          'enviado': sms['enviado'] == 1,
-          'fechaEnvio': sms['fechaEnvio'],
-          'error': sms['error'],
-        };
-      } else {
-        return {'success': false, 'error': 'SMS no encontrado'};
-      }
+      return await LocalDatabase.verificarEstadoSMS(smsId);
     } catch (e) {
       return {'success': false, 'error': 'Error verificando estado de SMS: $e'};
+    }
+  }
+
+  // Verificar si se debe enviar SMS al empleado según reglas
+  static Future<bool> _shouldSendToEmployee(
+    Map<String, dynamic> empleado,
+    EmployeeService employeeService,
+    String dayName,
+    TimeOfDay currentTime,
+  ) async {
+    // 1. Verificar si está activo (Notificaciones activas)
+    if (empleado['activo'] != true && empleado['activo'] != 1) {
+      return false;
+    }
+
+    // 2. Verificar horario laboral
+    try {
+      final schedulesResponse = await employeeService.getWorkSchedules(
+        empleado['id'],
+      );
+
+      if (schedulesResponse.isSuccess && schedulesResponse.data != null) {
+        final schedules = schedulesResponse.data!;
+
+        // Filtrar todos los horarios de HOY
+        final todaySchedules = schedules
+            .where((s) => s['diaSemana'] == dayName && s['activo'] == true)
+            .toList();
+
+        // Si no tiene horarios hoy, no trabaja
+        if (todaySchedules.isEmpty) return false;
+
+        // Verificar si la hora actual está en CUALQUIERA de los rangos (Horario partido)
+        for (var schedule in todaySchedules) {
+          final start = _parseTime(schedule['horaInicio']);
+          final end = _parseTime(schedule['horaFin']);
+
+          if (_isTimeBetween(currentTime, start, end)) {
+            // Encontró un rango válido -> enviar
+            return true;
+          }
+        }
+        // Si revisó todos los rangos y ninguno coincide -> no enviar
+        return false;
+      }
+      // Si no hay horarios definidos o falla la llamada -> no enviar
+      return false;
+    } catch (e) {
+      // Log removed for optimization
+      return false;
     }
   }
 }

@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import '../controllers/auth_controller.dart';
+import '../controllers/system_controller.dart';
 import '../core/design/design_system.dart';
 import '../core/widgets/responsive_widgets.dart';
+import '../services/payment_notification_service.dart';
+import '../services/sms_service.dart';
+import '../services/background_service.dart';
+import '../widgets/app_header.dart';
 
 class AndroidPermissionsScreen extends StatefulWidget {
   final VoidCallback? onPermissionsGranted;
 
-  const AndroidPermissionsScreen({Key? key, this.onPermissionsGranted})
-    : super(key: key);
+  const AndroidPermissionsScreen({super.key, this.onPermissionsGranted});
 
   @override
   State<AndroidPermissionsScreen> createState() =>
@@ -17,8 +22,8 @@ class AndroidPermissionsScreen extends StatefulWidget {
 
 class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen>
     with TickerProviderStateMixin {
-  bool _isLoading = false;
   Map<Permission, PermissionStatus> _permissions = {};
+  bool _notificationListenerGranted = false;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -27,7 +32,7 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen>
   void initState() {
     super.initState();
     _initializeAnimations();
-    _checkPermissions();
+    _checkAndNavigateIfGranted();
   }
 
   void _initializeAnimations() {
@@ -44,7 +49,7 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen>
     );
 
     _slideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+        Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(
           CurvedAnimation(
             parent: _animationController,
             curve: DesignSystem.curveEaseOut,
@@ -61,388 +66,357 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen>
   }
 
   Future<void> _checkPermissions() async {
-    setState(() => _isLoading = true);
+    final Map<Permission, PermissionStatus> statuses = {};
 
-    final permissions = [Permission.sms, Permission.notification];
+    statuses[Permission.sms] = await Permission.sms.status;
+    statuses[Permission.notification] = await Permission.notification.status;
+    statuses[Permission.ignoreBatteryOptimizations] =
+        await Permission.ignoreBatteryOptimizations.status;
 
-    final statuses = await permissions.request();
+    final listenerGranted = await PaymentNotificationService.hasPermission;
 
-    setState(() {
-      _permissions = statuses;
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _permissions = statuses;
+        _notificationListenerGranted = listenerGranted;
+      });
+    }
   }
 
-  // Verificar si todos los permisos están concedidos
   bool get _allPermissionsGranted {
     final smsGranted = _permissions[Permission.sms]?.isGranted ?? false;
     final notificationGranted =
         _permissions[Permission.notification]?.isGranted ?? false;
-    // El permiso de segundo plano se considera concedido si los otros están concedidos
-    return smsGranted && notificationGranted;
+    return smsGranted && notificationGranted && _notificationListenerGranted;
   }
 
   Future<void> _requestPermissions() async {
-    setState(() => _isLoading = true);
-
-    // Solicitar permisos uno por uno
     await Permission.sms.request();
     await Permission.notification.request();
 
-    // Verificar estado final
+    if (!_notificationListenerGranted) {
+      await PaymentNotificationService.openSettings();
+    }
+
+    await Permission.ignoreBatteryOptimizations.request();
     await _checkPermissions();
 
-    // Si todos los permisos están concedidos, navegar automáticamente
-    if (_allPermissionsGranted) {
-      if (widget.onPermissionsGranted != null) {
-        widget.onPermissionsGranted!();
-      } else {
-        Navigator.pushReplacementNamed(context, '/login');
-      }
+    if (_allPermissionsGranted && mounted) {
+      _navigateToDashboard();
     }
   }
 
-  Future<void> _openNotificationSettings() async {
-    await openAppSettings();
+  Future<void> _checkAndNavigateIfGranted() async {
+    await _checkPermissions();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setupAppLifecycleListener();
+    });
+  }
+
+  void _setupAppLifecycleListener() {
+    WidgetsBinding.instance.addObserver(
+      _AppLifecycleObserver(() async {
+        await _checkPermissions();
+      }),
+    );
+  }
+
+  void _navigateToDashboard() {
+    // Iniciar servicios en segundo plano al entrar al dashboard
+    final authController = Provider.of<AuthController>(context, listen: false);
+    final user = authController.currentUser;
+
+    if (user != null) {
+      debugPrint("🚀 Iniciando servicios desde pantalla de permisos...");
+      PaymentNotificationService.init(user).then((_) {
+        PaymentNotificationService.startListening(showDialog: false);
+      });
+      SMSService.procesarSMSPendientes();
+      BackgroundService.start();
+    }
+
+    if (widget.onPermissionsGranted != null) {
+      widget.onPermissionsGranted!();
+    } else {
+      Navigator.pushReplacementNamed(context, '/dashboard');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final systemController = Provider.of<SystemController>(context);
+
     return Scaffold(
       backgroundColor: DesignSystem.backgroundColor,
-      body: SafeArea(
-        child: ResponsiveContainer(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: SlideTransition(
-              position: _slideAnimation,
-              child: Column(
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildHeader(context),
-                          SizedBox(
-                            height: DesignSystem.getResponsivePadding(context),
-                          ),
-                          _buildPermissionsList(context),
-                        ],
-                      ),
+      body: Column(
+        children: [
+          const AppHeader(
+            title: 'Configuración inicial',
+            subtitle: 'Gestiona los permisos necesarios',
+            showUserInfo: true,
+          ),
+          Expanded(
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: SlideTransition(
+                position: _slideAnimation,
+                child: ResponsiveContainer(
+                  maxWidth: 600, // Un poco más ancho que el login para el grid
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: DesignSystem.spacingM,
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: DesignSystem.spacingM),
+                        _buildModernHeader(context, systemController),
+                        const SizedBox(height: DesignSystem.spacingM),
+                        _buildPermissionsGrid(context),
+                      ],
                     ),
                   ),
-                  _buildActionButtons(context),
-                ],
+                ),
               ),
             ),
           ),
-        ),
+          _buildBottomActions(context),
+        ],
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildModernHeader(
+    BuildContext context,
+    SystemController systemController,
+  ) {
+    final hasInternet = systemController.hasInternetConnection;
+    final hasBackend = systemController.isBackendReachable;
+
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(DesignSystem.getResponsivePadding(context)),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: DesignSystem.primaryGradient,
-        borderRadius: BorderRadius.circular(DesignSystem.radiusL),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: DesignSystem.shadowM,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding: const EdgeInsets.all(DesignSystem.spacingM),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-                ),
-                child: const Icon(
-                  Icons.security,
-                  color: Colors.white,
-                  size: DesignSystem.iconSizeL,
-                ),
+              const ResponsiveText(
+                'Feelin Pay',
+                type: TextType.title,
+                style: TextStyle(color: Colors.white, fontSize: 18),
               ),
-              SizedBox(width: DesignSystem.spacingM),
-              Expanded(
-                child: ResponsiveText(
-                  'Permisos Necesarios',
-                  type: TextType.display,
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ),
+              _buildStatusBadge(hasInternet, hasBackend),
             ],
           ),
-          SizedBox(height: DesignSystem.spacingM),
+          const SizedBox(height: 12),
           ResponsiveText(
             _allPermissionsGranted
-                ? '¡Excelente! Todos los permisos necesarios han sido concedidos. La aplicación está lista para funcionar.'
-                : 'Feelin Pay necesita 2 permisos: SMS para notificar empleados y Notificaciones para detectar pagos de Yape automáticamente.',
+                ? '¡Configuración completa! Ya puedes gestionar tus pagos.'
+                : 'Esta es la Gestión de Feelin Pay. Activa los permisos para comenzar.',
             type: TextType.body,
-            style: const TextStyle(color: Colors.white70, height: 1.5),
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 13,
+              height: 1.4,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildPermissionsList(BuildContext context) {
+  Widget _buildStatusBadge(bool hasInternet, bool hasBackend) {
+    bool ok = hasInternet && hasBackend;
+    String label = !hasInternet
+        ? 'SIN RED'
+        : (!hasBackend ? 'SIN SERVIDOR' : 'CONECTADO');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: (ok ? DesignSystem.successColor : DesignSystem.errorColor)
+            .withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            ok ? Icons.check_circle : Icons.error_outline,
+            color: Colors.white,
+            size: 14,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPermissionsGrid(BuildContext context) {
     final permissions = [
       _PermissionData(
-        icon: Icons.sms,
-        title: 'SMS',
-        description: 'Para notificar a empleados cuando recibas pagos de Yape',
+        icon: Icons.sms_outlined,
+        title: 'Enviar SMS (Alertas)',
         permission: Permission.sms,
         isRequired: true,
       ),
       _PermissionData(
-        icon: Icons.notifications,
-        title: 'Lectura de Notificaciones',
-        description: 'Para leer notificaciones de pagos de Yape (Perú)',
+        icon: Icons.notifications_none_outlined,
+        title: 'Notificaciones',
         permission: Permission.notification,
+        isRequired: true,
+      ),
+      _PermissionData(
+        icon: Icons.flash_on_outlined,
+        title: 'Listener',
+        permission: null,
+        isGrantedOverride: _notificationListenerGranted,
         isRequired: true,
       ),
     ];
 
     return Column(
       children: permissions
-          .map(
-            (permission) => Padding(
-              padding: const EdgeInsets.only(bottom: DesignSystem.spacingM),
-              child: _buildPermissionCard(context, permission),
-            ),
-          )
+          .map((p) => _buildPermissionItem(context, p))
           .toList(),
     );
   }
 
-  Widget _buildPermissionCard(
-    BuildContext context,
-    _PermissionData permissionData,
-  ) {
-    PermissionStatus status;
-    if (permissionData.permission != null) {
-      status =
-          _permissions[permissionData.permission!] ?? PermissionStatus.denied;
-    } else {
-      // Para el permiso de "Segundo Plano", considerarlo concedido si los otros están concedidos
-      status = _allPermissionsGranted
-          ? PermissionStatus.granted
-          : PermissionStatus.denied;
+  Widget _buildPermissionItem(BuildContext context, _PermissionData p) {
+    bool isGranted = false;
+    if (p.permission != null) {
+      isGranted = _permissions[p.permission!]?.isGranted ?? false;
+    } else if (p.isGrantedOverride != null) {
+      isGranted = p.isGrantedOverride!;
     }
 
-    return ResponsiveCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(DesignSystem.spacingM),
-                decoration: BoxDecoration(
-                  color: permissionData.isRequired
-                      ? DesignSystem.primaryColor.withOpacity(0.1)
-                      : DesignSystem.textTertiary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-                ),
-                child: Icon(
-                  permissionData.icon,
-                  color: permissionData.isRequired
-                      ? DesignSystem.primaryColor
-                      : DesignSystem.textTertiary,
-                  size: DesignSystem.iconSizeM,
-                ),
-              ),
-              SizedBox(width: DesignSystem.spacingM),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ResponsiveText(
-                            permissionData.title,
-                            type: TextType.title,
-                          ),
-                        ),
-                        if (permissionData.isRequired) ...[
-                          const SizedBox(width: DesignSystem.spacingS),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: DesignSystem.spacingS,
-                              vertical: DesignSystem.spacingXS,
-                            ),
-                            decoration: BoxDecoration(
-                              color: DesignSystem.errorColor,
-                              borderRadius: BorderRadius.circular(
-                                DesignSystem.radiusS,
-                              ),
-                            ),
-                            child: const ResponsiveText(
-                              'REQUERIDO',
-                              type: TextType.caption,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    SizedBox(height: DesignSystem.spacingS),
-                    ResponsiveText(
-                      permissionData.description,
-                      type: TextType.body,
-                      style: const TextStyle(color: DesignSystem.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(width: DesignSystem.spacingM),
-              _buildStatusIndicator(status),
-            ],
+    return InkWell(
+      onTap: () async {
+        if (p.permission != null) {
+          await p.permission!.request();
+        } else if (p.title == 'Listener') {
+          await PaymentNotificationService.openSettings();
+        }
+        _checkPermissions();
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: DesignSystem.surfaceColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isGranted
+                ? DesignSystem.successColor.withValues(alpha: 0.3)
+                : DesignSystem.primaryColor.withValues(alpha: 0.1),
           ),
-        ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color:
+                    (isGranted
+                            ? DesignSystem.successColor
+                            : DesignSystem.primaryColor)
+                        .withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                p.icon,
+                color: isGranted
+                    ? DesignSystem.successColor
+                    : DesignSystem.primaryColor,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                p.title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            Icon(
+              isGranted ? Icons.check_circle : Icons.pending_outlined,
+              color: isGranted
+                  ? DesignSystem.successColor
+                  : DesignSystem.warningColor,
+              size: 18,
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildStatusIndicator(PermissionStatus status) {
-    Color statusColor;
-    IconData statusIcon;
-
-    switch (status) {
-      case PermissionStatus.granted:
-        statusColor = DesignSystem.successColor;
-        statusIcon = Icons.check_circle;
-        break;
-      case PermissionStatus.denied:
-        statusColor = DesignSystem.warningColor;
-        statusIcon = Icons.cancel;
-        break;
-      case PermissionStatus.permanentlyDenied:
-        statusColor = DesignSystem.errorColor;
-        statusIcon = Icons.block;
-        break;
-      default:
-        statusColor = DesignSystem.textTertiary;
-        statusIcon = Icons.pending;
-    }
-
-    return Column(
-      children: [
-        Icon(statusIcon, color: statusColor, size: DesignSystem.iconSizeS),
-        SizedBox(height: DesignSystem.spacingXS),
-        ResponsiveText(
-          _getStatusText(status),
-          type: TextType.caption,
-          style: TextStyle(color: statusColor, fontWeight: FontWeight.w600),
-        ),
-      ],
-    );
-  }
-
-  String _getStatusText(PermissionStatus status) {
-    switch (status) {
-      case PermissionStatus.granted:
-        return 'Concedido';
-      case PermissionStatus.denied:
-        return 'Denegado';
-      case PermissionStatus.permanentlyDenied:
-        return 'Denegado permanentemente';
-      default:
-        return 'Pendiente';
-    }
-  }
-
-  Widget _buildActionButtons(BuildContext context) {
+  Widget _buildBottomActions(BuildContext context) {
     return Container(
-      padding: EdgeInsets.all(DesignSystem.getResponsivePadding(context)),
-      child: Column(
-        children: [
-          if (_allPermissionsGranted) ...[
-            // Botón de continuar cuando todos los permisos están concedidos
-            ResponsiveButton(
-              text: 'Continuar al Login',
-              onPressed: () {
-                if (widget.onPermissionsGranted != null) {
-                  widget.onPermissionsGranted!();
-                } else {
-                  Navigator.pushReplacementNamed(context, '/login');
-                }
-              },
-              icon: Icons.check_circle,
-              type: ButtonType.primary,
-              size: ButtonSize.large,
-            ),
-            SizedBox(height: DesignSystem.spacingM),
-            ResponsiveButton(
-              text: 'Verificar Permisos',
-              onPressed: _isLoading ? null : _checkPermissions,
-              isLoading: _isLoading,
-              icon: Icons.refresh,
-              type: ButtonType.secondary,
-              size: ButtonSize.medium,
-            ),
-          ] else ...[
-            // Botones cuando faltan permisos
-            ResponsiveButton(
-              text: 'Solicitar Permisos',
-              onPressed: _isLoading ? null : _requestPermissions,
-              isLoading: _isLoading,
-              icon: Icons.security,
-              type: ButtonType.primary,
-              size: ButtonSize.large,
-            ),
-            SizedBox(height: DesignSystem.spacingM),
-            ResponsiveButton(
-              text: 'Configurar en Ajustes',
-              onPressed: _openNotificationSettings,
-              icon: Icons.settings,
-              type: ButtonType.secondary,
-              size: ButtonSize.large,
-            ),
-            SizedBox(height: DesignSystem.spacingM),
-            // Mensaje de advertencia en lugar del botón de continuar
-            Container(
-              padding: const EdgeInsets.all(DesignSystem.spacingM),
-              decoration: BoxDecoration(
-                color: DesignSystem.warningColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-                border: Border.all(
-                  color: DesignSystem.warningColor.withOpacity(0.3),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.warning,
-                    color: DesignSystem.warningColor,
-                    size: DesignSystem.iconSizeM,
-                  ),
-                  SizedBox(width: DesignSystem.spacingM),
-                  Expanded(
-                    child: ResponsiveText(
-                      'La aplicación necesita estos 2 permisos para notificar empleados y detectar pagos de Yape automáticamente',
-                      type: TextType.body,
-                      style: TextStyle(
-                        color: DesignSystem.warningColor,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+      decoration: BoxDecoration(
+        color: DesignSystem.backgroundColor,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -5),
+          ),
         ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.all(DesignSystem.spacingL),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ResponsiveButton(
+                text: _allPermissionsGranted ? 'Continuar' : 'Activar Permisos',
+                onPressed: () {
+                  if (_allPermissionsGranted) {
+                    _navigateToDashboard();
+                  } else {
+                    _requestPermissions();
+                  }
+                },
+                icon: _allPermissionsGranted
+                    ? Icons.arrow_forward
+                    : Icons.security,
+                type: ButtonType.primary,
+                size: ButtonSize.medium,
+              ),
+              if (!_allPermissionsGranted) ...[
+                const SizedBox(height: DesignSystem.spacingS),
+                ResponsiveButton(
+                  text: 'Configurar más tarde',
+                  onPressed: _navigateToDashboard,
+                  type: ButtonType.text,
+                  size: ButtonSize.small,
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -451,14 +425,28 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen>
 class _PermissionData {
   final IconData icon;
   final String title;
-  final String description;
   final Permission? permission;
+  final bool? isGrantedOverride;
   final bool isRequired;
+
   _PermissionData({
     required this.icon,
     required this.title,
-    required this.description,
     this.permission,
+    this.isGrantedOverride,
     required this.isRequired,
   });
+}
+
+class _AppLifecycleObserver with WidgetsBindingObserver {
+  final VoidCallback onResume;
+
+  _AppLifecycleObserver(this.onResume);
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      onResume();
+    }
+  }
 }

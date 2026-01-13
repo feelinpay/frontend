@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/design/design_system.dart';
 import '../controllers/auth_controller.dart';
-import '../services/user_management_service.dart';
+import '../widgets/app_header.dart';
 import '../widgets/three_dots_menu_widget.dart';
+import '../widgets/admin_drawer.dart';
+import '../core/widgets/responsive_widgets.dart';
+import '../services/user_management_service.dart';
 
 class SuperAdminDashboard extends StatefulWidget {
   const SuperAdminDashboard({super.key});
@@ -17,9 +20,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   final UserManagementService _userService = UserManagementService();
-  
+
   Map<String, dynamic>? _statistics;
   bool _isLoading = true;
   String? _error;
@@ -37,21 +41,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard>
       vsync: this,
     );
 
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOut,
-    ));
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+    );
 
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutCubic,
-    ));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
 
     _animationController.forward();
   }
@@ -69,200 +69,132 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard>
     });
 
     try {
-      print('🔍 [SuperAdminDashboard] Loading statistics...');
       final response = await _userService.getStatistics();
-      
-      print('🔍 [SuperAdminDashboard] Statistics response received');
-      
+
       if (response.isSuccess && response.data != null) {
         setState(() {
           _statistics = response.data!;
           _isLoading = false;
         });
-        print('🔍 [SuperAdminDashboard] Statistics loaded successfully: $_statistics');
       } else {
         setState(() {
           _error = response.message;
           _isLoading = false;
         });
-        print('🔍 [SuperAdminDashboard] Error loading statistics: ${response.message}');
       }
     } catch (e) {
       setState(() {
         _error = 'Error al cargar estadísticas: $e';
         _isLoading = false;
       });
-      print('🔍 [SuperAdminDashboard] Exception loading statistics: $e');
+      // Error silenced
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authController = Provider.of<AuthController>(context);
+    final authController = context.read<AuthController>();
     final currentUser = authController.currentUser;
 
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: DesignSystem.backgroundColor,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header con gradiente
-            Container(
-              padding: const EdgeInsets.all(DesignSystem.spacingL),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    DesignSystem.primaryColor,
-                    DesignSystem.primaryLight,
-                  ],
-                ),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(DesignSystem.radiusXL),
-                  bottomRight: Radius.circular(DesignSystem.radiusXL),
-                ),
+      drawer: AdminDrawer(user: currentUser, authController: authController),
+      body: Column(
+        children: [
+          // Header estandarizado con AppHeader
+          AppHeader(
+            title: 'Feelin Pay',
+            subtitle: 'Bienvenido, ${currentUser?.nombre ?? 'Administrador'}',
+            onMenuPressed: () => _scaffoldKey.currentState?.openDrawer(),
+            menuItems: [
+              ThreeDotsMenuItem(
+                icon: Icons.refresh,
+                title: 'Actualizar',
+                onTap: _loadStatistics,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(DesignSystem.spacingM),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(DesignSystem.radiusL),
-                        ),
-                        child: const Icon(
-                          Icons.dashboard_outlined,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: DesignSystem.spacingM),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            ShaderMask(
-                              shaderCallback: (bounds) => const LinearGradient(
-                                colors: [Colors.white, Colors.white70],
-                              ).createShader(bounds),
-                              child: const Text(
-                                'Dashboard Administrativo',
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              'Bienvenido, ${currentUser?.nombre ?? 'Administrador'}',
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      ThreeDotsMenuWidget(
-                        items: [
-                          ThreeDotsMenuItem(
-                            icon: Icons.refresh,
-                            title: 'Actualizar',
-                            onTap: _loadStatistics,
-                          ),
-                          ThreeDotsMenuItem(
-                            icon: Icons.download,
-                            title: 'Exportar Datos',
-                            onTap: () {
-                              // TODO: Implementar exportación
-                            },
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+            ],
+          ),
 
-            // Contenido principal
-            Expanded(
-              child: _isLoading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: DesignSystem.primaryColor,
-                      ),
-                    )
-                  : _error != null
-                      ? Center(
+          // Contenido principal
+          Expanded(
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: DesignSystem.primaryColor,
+                    ),
+                  )
+                : _error != null
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          size: 64,
+                          color: DesignSystem.errorColor,
+                        ),
+                        const SizedBox(height: DesignSystem.spacingM),
+                        Text(
+                          _error!,
+                          style: const TextStyle(
+                            color: DesignSystem.errorColor,
+                            fontSize: 16,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: DesignSystem.spacingM),
+                        ElevatedButton(
+                          onPressed: _loadStatistics,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: DesignSystem.primaryColor,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Reintentar'),
+                        ),
+                      ],
+                    ),
+                  )
+                : FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: SlideTransition(
+                      position: _slideAnimation,
+                      child: ResponsiveContainer(
+                        maxWidth: 1000,
+                        padding: const EdgeInsets.all(DesignSystem.spacingM),
+                        child: SingleChildScrollView(
                           child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(
-                                Icons.error_outline,
-                                size: 64,
-                                color: DesignSystem.errorColor,
-                              ),
-                              const SizedBox(height: DesignSystem.spacingM),
-                              Text(
-                                _error!,
-                                style: TextStyle(
-                                  color: DesignSystem.errorColor,
-                                  fontSize: 16,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: DesignSystem.spacingM),
-                              ElevatedButton(
-                                onPressed: _loadStatistics,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: DesignSystem.primaryColor,
-                                  foregroundColor: Colors.white,
-                                ),
-                                child: const Text('Reintentar'),
-                              ),
+                              // Estadísticas principales
+                              _buildStatsSection(),
+                              const SizedBox(height: DesignSystem.spacingXL),
+
+                              // Atajos de Gestión
+                              _buildManagementShortcuts(context),
                             ],
                           ),
-                        )
-                      : FadeTransition(
-                          opacity: _fadeAnimation,
-                          child: SlideTransition(
-                            position: _slideAnimation,
-                            child: SingleChildScrollView(
-                              padding: const EdgeInsets.all(DesignSystem.spacingM),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Estadísticas principales
-                                  _buildStatsSection(),
-                                  const SizedBox(height: DesignSystem.spacingXL),
-                                  
-                                  // Gráficos y análisis
-                                  _buildAnalyticsSection(),
-                                  const SizedBox(height: DesignSystem.spacingXL),
-                                  
-                                  // Actividad reciente
-                                  _buildRecentActivitySection(),
-                                ],
-                              ),
-                            ),
-                          ),
                         ),
-            ),
-          ],
-        ),
+                      ),
+                    ),
+                  ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildStatsSection() {
     final stats = _statistics ?? {};
-    
+
+    final totalUsuarios = stats['totalUsuarios'] ?? 0;
+    final totalAdmins = stats['totalAdmins'] ?? 0;
+    final totalPropietarios = (totalUsuarios - totalAdmins).clamp(
+      0,
+      totalUsuarios,
+    );
+    final totalEmpleados = stats['totalEmpleados'] ?? 0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -275,42 +207,44 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard>
           ),
         ),
         const SizedBox(height: DesignSystem.spacingM),
-        
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          crossAxisSpacing: DesignSystem.spacingM,
-          mainAxisSpacing: DesignSystem.spacingM,
-          childAspectRatio: 1.5,
+
+        // Primera fila: Usuarios
+        Row(
           children: [
-            _buildStatCard(
-              title: 'Total Usuarios',
-              value: '${stats['totalUsuarios'] ?? stats['totalUsers'] ?? 0}',
-              icon: Icons.people,
-              color: DesignSystem.primaryColor,
-              trend: stats['usuariosTrend'] ?? stats['usersTrend'] ?? 0,
+            Expanded(
+              child: _buildStatCard(
+                title: 'Super Admins',
+                value: totalAdmins.toString(),
+                icon: Icons.admin_panel_settings,
+                color: const Color(0xFF8B5CF6),
+                subtitle: 'Administradores',
+              ),
             ),
-            _buildStatCard(
-              title: 'Propietarios Activos',
-              value: '${stats['propietariosActivos'] ?? stats['totalOwners'] ?? 0}',
-              icon: Icons.business,
-              color: DesignSystem.primaryLight,
-              trend: stats['propietariosTrend'] ?? stats['ownersTrend'] ?? 0,
+            const SizedBox(width: DesignSystem.spacingM),
+            Expanded(
+              child: _buildStatCard(
+                title: 'Propietarios',
+                value: totalPropietarios.toString(),
+                icon: Icons.business,
+                color: const Color(0xFF3B82F6),
+                subtitle: 'Dueños de negocio',
+              ),
             ),
-            _buildStatCard(
-              title: 'Total Empleados',
-              value: '${stats['totalEmpleados'] ?? stats['totalEmployees'] ?? 0}',
-              icon: Icons.work,
-              color: DesignSystem.secondaryColor,
-              trend: stats['empleadosTrend'] ?? stats['employeesTrend'] ?? 0,
-            ),
-            _buildStatCard(
-              title: 'Pagos Hoy',
-              value: '${stats['pagosHoy'] ?? stats['paymentsToday'] ?? 0}',
-              icon: Icons.payment,
-              color: DesignSystem.accentColor,
-              trend: stats['pagosTrend'] ?? stats['paymentsTrend'] ?? 0,
+          ],
+        ),
+        const SizedBox(height: DesignSystem.spacingM),
+
+        // Segunda fila: Empleados y Estado
+        Row(
+          children: [
+            Expanded(
+              child: _buildStatCard(
+                title: 'Total Empleados',
+                value: totalEmpleados.toString(),
+                icon: Icons.people,
+                color: const Color(0xFF10B981),
+                subtitle: 'Todos los empleados',
+              ),
             ),
           ],
         ),
@@ -323,7 +257,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard>
     required String value,
     required IconData icon,
     required Color color,
-    required double trend,
+    required String subtitle,
   }) {
     return Container(
       padding: const EdgeInsets.all(DesignSystem.spacingM),
@@ -336,61 +270,39 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(
-                  icon,
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const Spacer(),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
                   color: color,
-                  size: 20,
                 ),
               ),
-              if (trend != 0)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: trend > 0 ? DesignSystem.successColor.withOpacity(0.1) : DesignSystem.errorColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        trend > 0 ? Icons.trending_up : Icons.trending_down,
-                        size: 12,
-                        color: trend > 0 ? DesignSystem.successColor : DesignSystem.errorColor,
-                      ),
-                      const SizedBox(width: 2),
-                      Text(
-                        '${trend.abs().toStringAsFixed(1)}%',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500,
-                          color: trend > 0 ? DesignSystem.successColor : DesignSystem.errorColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
             ],
           ),
-          const SizedBox(height: DesignSystem.spacingS),
+          const SizedBox(height: 8),
           Text(
-            value,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
               color: DesignSystem.textPrimary,
             ),
           ),
+          const SizedBox(height: 4),
           Text(
-            title,
-            style: TextStyle(
+            subtitle,
+            style: const TextStyle(
               fontSize: 12,
               color: DesignSystem.textSecondary,
             ),
@@ -400,12 +312,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard>
     );
   }
 
-  Widget _buildAnalyticsSection() {
+  Widget _buildManagementShortcuts(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Análisis de Actividad',
+          'Accesos Rápidos',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
@@ -413,94 +325,110 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard>
           ),
         ),
         const SizedBox(height: DesignSystem.spacingM),
-        
-        Container(
-          padding: const EdgeInsets.all(DesignSystem.spacingL),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(DesignSystem.radiusL),
-            boxShadow: DesignSystem.shadowM,
-          ),
-          child: Column(
-            children: [
-              const Icon(
-                Icons.analytics_outlined,
-                size: 64,
-                color: DesignSystem.textTertiary,
-              ),
-              const SizedBox(height: DesignSystem.spacingM),
-              Text(
-                'Gráficos de análisis',
-                style: TextStyle(
-                  color: DesignSystem.textSecondary,
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(height: DesignSystem.spacingS),
-              Text(
-                'Los gráficos detallados estarán disponibles en la próxima versión',
-                style: TextStyle(
-                  color: DesignSystem.textTertiary,
-                  fontSize: 12,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+
+        // Grilla de Atajos Dinámica
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: DesignSystem.isMobile(context)
+              ? 2
+              : DesignSystem.getResponsiveColumns(context),
+          mainAxisSpacing: DesignSystem.spacingS,
+          crossAxisSpacing: DesignSystem.spacingS,
+          childAspectRatio: DesignSystem.isMobile(context) ? 2.2 : 3.0,
+          children: [
+            _buildShortcutCard(
+              title: 'Gestión de Usuarios',
+              icon: Icons.people_alt,
+              color: const Color(0xFF8B5CF6),
+              onTap: () => Navigator.pushNamed(context, '/user-management'),
+            ),
+            _buildShortcutCard(
+              title: 'Mis Empleados',
+              icon: Icons.people,
+              color: const Color(0xFF10B981),
+              onTap: () => Navigator.pushNamed(context, '/employee-management'),
+            ),
+            _buildShortcutCard(
+              title: 'Gestión de Membresías',
+              icon: Icons.card_membership,
+              color: const Color(0xFF3B82F6),
+              onTap: () =>
+                  Navigator.pushNamed(context, '/membership-management'),
+            ),
+            _buildShortcutCard(
+              title: 'Reportes de Membresías',
+              icon: Icons.bar_chart,
+              color: const Color(0xFFEC4899),
+              onTap: () => Navigator.pushNamed(context, '/membership-reports'),
+            ),
+            _buildShortcutCard(
+              title: 'Gestión de Permisos',
+              icon: Icons.security,
+              color: const Color(0xFFF59E0B),
+              onTap: () =>
+                  Navigator.pushNamed(context, '/permissions-management'),
+            ),
+          ],
         ),
       ],
     );
   }
 
-  Widget _buildRecentActivitySection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Actividad Reciente',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: DesignSystem.textPrimary,
-          ),
+  Widget _buildShortcutCard({
+    required String title,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(DesignSystem.radiusL),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: DesignSystem.spacingS,
+          vertical: DesignSystem.spacingS,
         ),
-        const SizedBox(height: DesignSystem.spacingM),
-        
-        Container(
-          padding: const EdgeInsets.all(DesignSystem.spacingL),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(DesignSystem.radiusL),
-            boxShadow: DesignSystem.shadowM,
-          ),
-          child: Column(
-            children: [
-              const Icon(
-                Icons.history,
-                size: 64,
-                color: DesignSystem.textTertiary,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+          border: Border.all(color: color.withValues(alpha: 0.1), width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
               ),
-              const SizedBox(height: DesignSystem.spacingM),
-              Text(
-                'Registro de actividades',
-                style: TextStyle(
-                  color: DesignSystem.textSecondary,
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(height: DesignSystem.spacingS),
-              Text(
-                'El registro de actividades estará disponible próximamente',
-                style: TextStyle(
-                  color: DesignSystem.textTertiary,
+              child: Icon(icon, color: color, size: 16),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
                   fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: DesignSystem.textPrimary,
+                  height: 1.1,
                 ),
-                textAlign: TextAlign.center,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

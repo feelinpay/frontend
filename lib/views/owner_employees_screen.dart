@@ -4,16 +4,17 @@ import '../services/user_management_service.dart';
 import '../models/user_model.dart';
 import '../models/employee_model.dart';
 import '../widgets/snackbar_helper.dart';
+import '../widgets/app_header.dart';
+import '../widgets/three_dots_menu_widget.dart';
 import '../utils/error_helper.dart';
-import '../views/country_picker.dart';
+import '../widgets/add_employee_dialog.dart'; // NEW
+import '../widgets/edit_employee_dialog.dart'; // NEW
+import '../views/schedule_management_screen.dart'; // NEW
 
 class OwnerEmployeesScreen extends StatefulWidget {
   final UserModel owner;
 
-  const OwnerEmployeesScreen({
-    super.key,
-    required this.owner,
-  });
+  const OwnerEmployeesScreen({super.key, required this.owner});
 
   @override
   State<OwnerEmployeesScreen> createState() => _OwnerEmployeesScreenState();
@@ -23,7 +24,7 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
     with TickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   final UserManagementService _userService = UserManagementService();
-  
+
   List<EmployeeModel> _employees = [];
   List<EmployeeModel> _filteredEmployees = [];
   bool _isLoading = false;
@@ -37,7 +38,9 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
     super.initState();
     _initializeAnimations();
     _loadEmployees();
-    _searchController.addListener(() => _filterEmployees(_searchController.text));
+    _searchController.addListener(
+      () => _filterEmployees(_searchController.text),
+    );
   }
 
   void _initializeAnimations() {
@@ -65,7 +68,7 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
 
     try {
       final response = await _userService.getEmployeesByOwner(widget.owner.id);
-      
+
       if (response.isSuccess && response.data != null) {
         setState(() {
           _employees = response.data!;
@@ -77,15 +80,22 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
         setState(() {
           _isLoading = false;
         });
-        
-        SnackBarHelper.showError(context, ErrorHelper.processApiError(response));
+
+        if (mounted) {
+          SnackBarHelper.showError(
+            context,
+            ErrorHelper.processApiError(response),
+          );
+        }
       }
     } catch (e) {
       setState(() {
         _isLoading = false;
       });
-      
-      SnackBarHelper.showError(context, 'Error al cargar empleados: $e');
+
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Error al cargar empleados: $e');
+      }
     }
   }
 
@@ -95,9 +105,11 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
         _filteredEmployees = _employees;
       } else {
         _filteredEmployees = _employees
-            .where((employee) =>
-                employee.nombre.toLowerCase().contains(query.toLowerCase()) ||
-                employee.telefono.contains(query))
+            .where(
+              (employee) =>
+                  employee.nombre.toLowerCase().contains(query.toLowerCase()) ||
+                  employee.telefono.contains(query),
+            )
             .toList();
       }
     });
@@ -108,33 +120,41 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
       _notificationsEnabled = false;
       return;
     }
-    
+
     _notificationsEnabled = _employees.every((employee) => employee.activo);
   }
 
   Future<void> _toggleAllNotifications() async {
-    SnackBarHelper.showLoading(context, _notificationsEnabled 
-        ? 'Desactivando notificaciones...' 
-        : 'Activando notificaciones...');
+    SnackBarHelper.showLoading(
+      context,
+      _notificationsEnabled
+          ? 'Desactivando notificaciones...'
+          : 'Activando notificaciones...',
+    );
 
     try {
       final newState = !_notificationsEnabled;
-      
+
       for (final employee in _employees) {
         if (employee.activo != newState) {
           final response = await _userService.toggleEmployeeForOwner(
-            widget.owner.id, 
+            widget.owner.id,
             employee.id,
-            newState
+            newState,
           );
-          
+
           if (!response.isSuccess) {
-            SnackBarHelper.showError(context, ErrorHelper.processApiError(response));
+            if (mounted) {
+              SnackBarHelper.showError(
+                context,
+                ErrorHelper.processApiError(response),
+              );
+            }
             return;
           }
         }
       }
-      
+
       setState(() {
         _notificationsEnabled = newState;
         for (int i = 0; i < _employees.length; i++) {
@@ -142,18 +162,22 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
         }
         _filteredEmployees = _employees;
       });
-      
+
       // Sin SnackBar de éxito para evitar latencia
-          
     } catch (e) {
-      SnackBarHelper.showError(context, 'Error al cambiar notificaciones: $e');
+      if (mounted) {
+        SnackBarHelper.showError(
+          context,
+          'Error al cambiar notificaciones: $e',
+        );
+      }
     }
   }
 
   Future<void> _addEmployee() async {
     await showDialog(
       context: context,
-      builder: (context) => _AddEmployeeDialog(
+      builder: (context) => AddEmployeeDialog(
         ownerId: widget.owner.id,
         onEmployeeAdded: (employee) {
           setState(() {
@@ -171,7 +195,9 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Confirmar eliminación'),
-        content: Text('¿Estás seguro de que quieres eliminar a ${employee.nombre}?'),
+        content: Text(
+          '¿Estás seguro de que quieres eliminar a ${employee.nombre}?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -190,24 +216,35 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
     );
 
     if (confirmed == true) {
+      if (!mounted) return;
       SnackBarHelper.showLoading(context, 'Eliminando empleado...');
-      
+
       try {
-        final response = await _userService.deleteEmployeeForOwner(widget.owner.id, employee.id);
-        
+        final response = await _userService.deleteEmployeeForOwner(
+          widget.owner.id,
+          employee.id,
+        );
+
         if (response.isSuccess) {
           setState(() {
             _employees.removeWhere((e) => e.id == employee.id);
             _filteredEmployees = _employees;
           });
           _updateNotificationsToggleState();
-          
+
           // Sin SnackBar de éxito para evitar latencia
         } else {
-          SnackBarHelper.showError(context, ErrorHelper.processApiError(response));
+          if (mounted) {
+            SnackBarHelper.showError(
+              context,
+              ErrorHelper.processApiError(response),
+            );
+          }
         }
       } catch (e) {
-        SnackBarHelper.showError(context, 'Error al eliminar empleado: $e');
+        if (mounted) {
+          SnackBarHelper.showError(context, 'Error al eliminar empleado: $e');
+        }
       }
     }
   }
@@ -216,43 +253,19 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: DesignSystem.backgroundColor,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(
-          'Empleados de ${widget.owner.nombre}',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                DesignSystem.primaryColor,
-                DesignSystem.primaryLight,
-              ],
-            ),
-          ),
+      body: FadeTransition(
+        opacity: _fadeAnimation!,
+        child: Column(
+          children: [
+            _buildHeader(context),
+            _buildOwnerInfoCard(),
+            _buildNotificationsToggle(),
+            _buildSearchBar(),
+            Expanded(child: _buildEmployeeList()),
+          ],
         ),
       ),
-      body: SafeArea(
-        child: FadeTransition(
-          opacity: _fadeAnimation!,
-          child: Column(
-            children: [
-              _buildHeader(),
-              _buildNotificationsToggle(),
-              _buildSearchBar(),
-              Expanded(child: _buildEmployeeList()),
-            ],
-          ),
-        ),
-      ),
+
       floatingActionButton: FloatingActionButton(
         onPressed: _addEmployee,
         backgroundColor: DesignSystem.primaryColor,
@@ -262,46 +275,59 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
+    return AppHeader(
+      title: 'Empleados de ${widget.owner.nombre}',
+      subtitle: '${_employees.length} empleados registrados',
+      showBackButton: true,
+      menuItems: [
+        ThreeDotsMenuItem(
+          icon: Icons.refresh,
+          title: 'Actualizar',
+          onTap: _loadEmployees,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOwnerInfoCard() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(
-        DesignSystem.spacingM,
-        DesignSystem.spacingL,
-        DesignSystem.spacingM,
-        DesignSystem.spacingM,
+      margin: const EdgeInsets.symmetric(
+        horizontal: DesignSystem.spacingM,
+        vertical: DesignSystem.spacingS,
       ),
+      padding: const EdgeInsets.all(DesignSystem.spacingM),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            DesignSystem.primaryColor.withOpacity(0.05),
-            DesignSystem.primaryColor.withOpacity(0.02),
-          ],
+        color: DesignSystem.surfaceColor,
+        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+        border: Border.all(
+          color: DesignSystem.primaryColor.withValues(alpha: 0.2),
         ),
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(DesignSystem.spacingM),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [DesignSystem.primaryColor, DesignSystem.primaryLight],
-              ),
-              borderRadius: BorderRadius.circular(DesignSystem.radiusL),
-              boxShadow: [
-                BoxShadow(
-                  color: DesignSystem.primaryColor.withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.people_outline,
-              color: Colors.white,
-              size: 24,
-            ),
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: DesignSystem.primaryColor.withValues(alpha: 0.1),
+            backgroundImage: widget.owner.imagen != null
+                ? NetworkImage(widget.owner.imagen!)
+                : null,
+            child: widget.owner.imagen == null
+                ? Text(
+                    widget.owner.initials,
+                    style: const TextStyle(
+                      color: DesignSystem.primaryColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  )
+                : null,
           ),
           const SizedBox(width: DesignSystem.spacingM),
           Expanded(
@@ -309,21 +335,39 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Gestión de Empleados',
-                  style: TextStyle(
-                    fontSize: DesignSystem.fontSizeL,
+                  widget.owner.nombre,
+                  style: const TextStyle(
+                    fontSize: DesignSystem.fontSizeM,
                     fontWeight: FontWeight.bold,
                     color: DesignSystem.textPrimary,
                   ),
                 ),
                 Text(
-                  '${widget.owner.nombre} • ${_employees.length} empleados',
-                  style: TextStyle(
+                  widget.owner.email,
+                  style: const TextStyle(
                     fontSize: DesignSystem.fontSizeS,
                     color: DesignSystem.textSecondary,
                   ),
                 ),
               ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: DesignSystem.spacingS,
+              vertical: 4,
+            ),
+            decoration: BoxDecoration(
+              color: DesignSystem.primaryColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(DesignSystem.radiusS),
+            ),
+            child: const Text(
+              'Propietario',
+              style: TextStyle(
+                fontSize: 10,
+                color: DesignSystem.primaryColor,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
@@ -337,14 +381,22 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
       child: Row(
         children: [
           Icon(
-            _notificationsEnabled ? Icons.notifications_off : Icons.notifications,
-            color: _notificationsEnabled ? DesignSystem.primaryColor : DesignSystem.textTertiary,
+            _notificationsEnabled
+                ? Icons.notifications_off
+                : Icons.notifications,
+            color: _notificationsEnabled
+                ? DesignSystem.primaryColor
+                : DesignSystem.textTertiary,
           ),
           const SizedBox(width: DesignSystem.spacingS),
           Text(
-            _notificationsEnabled ? 'Desactivar notificaciones a todos' : 'Activar notificaciones a todos',
+            _notificationsEnabled
+                ? 'Desactivar notificaciones a todos'
+                : 'Activar notificaciones a todos',
             style: TextStyle(
-              color: _notificationsEnabled ? DesignSystem.primaryColor : DesignSystem.textTertiary,
+              color: _notificationsEnabled
+                  ? DesignSystem.primaryColor
+                  : DesignSystem.textTertiary,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -367,18 +419,28 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
         onChanged: _filterEmployees,
         decoration: InputDecoration(
           hintText: 'Buscar empleados...',
-          prefixIcon: const Icon(Icons.search, color: DesignSystem.textSecondary),
+          prefixIcon: const Icon(
+            Icons.search,
+            color: DesignSystem.textSecondary,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-            borderSide: BorderSide(color: DesignSystem.textTertiary.withOpacity(0.3)),
+            borderSide: BorderSide(
+              color: DesignSystem.textTertiary.withValues(alpha: 0.3),
+            ),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-            borderSide: BorderSide(color: DesignSystem.textTertiary.withOpacity(0.3)),
+            borderSide: BorderSide(
+              color: DesignSystem.textTertiary.withValues(alpha: 0.3),
+            ),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-            borderSide: const BorderSide(color: DesignSystem.primaryColor, width: 2),
+            borderSide: const BorderSide(
+              color: DesignSystem.primaryColor,
+              width: 2,
+            ),
           ),
           filled: true,
           fillColor: DesignSystem.surfaceColor,
@@ -394,9 +456,7 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
   Widget _buildEmployeeList() {
     if (_isLoading) {
       return const Center(
-        child: CircularProgressIndicator(
-          color: DesignSystem.primaryColor,
-        ),
+        child: CircularProgressIndicator(color: DesignSystem.primaryColor),
       );
     }
 
@@ -435,7 +495,7 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
         borderRadius: BorderRadius.circular(DesignSystem.radiusM),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -443,7 +503,7 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
       ),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: DesignSystem.primaryColor.withOpacity(0.1),
+          backgroundColor: DesignSystem.primaryColor.withValues(alpha: 0.1),
           child: Text(
             employee.nombre.isNotEmpty ? employee.nombre[0].toUpperCase() : 'E',
             style: const TextStyle(
@@ -469,9 +529,7 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
             IconButton(
               onPressed: () => _toggleEmployeeNotifications(employee),
               icon: Icon(
-                employee.activo
-                    ? Icons.notifications
-                    : Icons.notifications_off,
+                employee.activo ? Icons.notifications : Icons.notifications_off,
                 color: employee.activo
                     ? DesignSystem.primaryColor
                     : DesignSystem.textTertiary,
@@ -482,6 +540,15 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
                 switch (value) {
                   case 'edit':
                     _editEmployee(employee);
+                    break;
+                  case 'schedule':
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            ScheduleManagementScreen(employee: employee),
+                      ),
+                    );
                     break;
                   case 'delete':
                     _deleteEmployee(employee);
@@ -499,6 +566,21 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
                     ],
                   ),
                 ),
+                // --- NEW ITEM START ---
+                const PopupMenuItem(
+                  value: 'schedule',
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_month,
+                        color: DesignSystem.secondaryColor,
+                      ),
+                      SizedBox(width: DesignSystem.spacingS),
+                      Text('Gestionar Horario'),
+                    ],
+                  ),
+                ),
+                // --- NEW ITEM END ---
                 const PopupMenuItem(
                   value: 'delete',
                   child: Row(
@@ -518,18 +600,21 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
   }
 
   Future<void> _toggleEmployeeNotifications(EmployeeModel employee) async {
-    SnackBarHelper.showLoading(context, employee.activo 
-        ? 'Desactivando notificaciones...' 
-        : 'Activando notificaciones...');
+    SnackBarHelper.showLoading(
+      context,
+      employee.activo
+          ? 'Desactivando notificaciones...'
+          : 'Activando notificaciones...',
+    );
 
     try {
       final newState = !employee.activo;
       final response = await _userService.toggleEmployeeForOwner(
-        widget.owner.id, 
+        widget.owner.id,
         employee.id,
-        newState
+        newState,
       );
-      
+
       if (response.isSuccess) {
         setState(() {
           final index = _employees.indexWhere((e) => e.id == employee.id);
@@ -539,20 +624,30 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
           }
         });
         _updateNotificationsToggleState();
-        
+
         // Sin SnackBar de éxito para evitar latencia
       } else {
-        SnackBarHelper.showError(context, ErrorHelper.processApiError(response));
+        if (mounted) {
+          SnackBarHelper.showError(
+            context,
+            ErrorHelper.processApiError(response),
+          );
+        }
       }
     } catch (e) {
-      SnackBarHelper.showError(context, 'Error al cambiar notificaciones: $e');
+      if (mounted) {
+        SnackBarHelper.showError(
+          context,
+          'Error al cambiar notificaciones: $e',
+        );
+      }
     }
   }
 
   Future<void> _editEmployee(EmployeeModel employee) async {
     await showDialog(
       context: context,
-      builder: (context) => _EditEmployeeDialog(
+      builder: (context) => EditEmployeeDialog(
         ownerId: widget.owner.id,
         employee: employee,
         onEmployeeUpdated: (updatedEmployee) {
@@ -567,421 +662,4 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
       ),
     );
   }
-
 }
-
-class _AddEmployeeDialog extends StatefulWidget {
-  final String ownerId;
-  final Function(EmployeeModel) onEmployeeAdded;
-
-  const _AddEmployeeDialog({
-    required this.ownerId,
-    required this.onEmployeeAdded,
-  });
-
-  @override
-  State<_AddEmployeeDialog> createState() => _AddEmployeeDialogState();
-}
-
-class _AddEmployeeDialogState extends State<_AddEmployeeDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _userService = UserManagementService();
-  Country _selectedCountry = countries.firstWhere((c) => c.code == 'PE');
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _phoneController.dispose();
-    super.dispose();
-  }
-
-  void _showCountryPicker() {
-    showDialog(
-      context: context,
-      builder: (context) => CountryPicker(
-        onCountrySelected: (country) {
-          setState(() {
-            _selectedCountry = country;
-          });
-          Navigator.pop(context);
-        },
-      ),
-    );
-  }
-
-  Future<void> _addEmployee() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    SnackBarHelper.showLoading(context, 'Agregando empleado...');
-
-    try {
-      final response = await _userService.createEmployeeForOwner(
-        widget.ownerId,
-        nombre: _nameController.text,
-        telefono: '${_selectedCountry.dialCode}${_phoneController.text}',
-      );
-
-      if (response.isSuccess && response.data != null) {
-        widget.onEmployeeAdded(response.data!);
-        Navigator.pop(context);
-        // Sin SnackBar de éxito para evitar latencia
-      } else {
-        SnackBarHelper.showError(context, ErrorHelper.processApiError(response));
-      }
-    } catch (e) {
-      SnackBarHelper.showError(context, 'Error al agregar empleado: $e');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(DesignSystem.radiusL),
-      ),
-      title: const Text('Agregar Empleado'),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _nameController,
-              decoration: InputDecoration(
-                labelText: 'Nombre',
-                hintText: 'Nombre completo del empleado',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-                  borderSide: BorderSide.none,
-                ),
-                filled: true,
-                fillColor: DesignSystem.surfaceColor,
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: DesignSystem.spacingM,
-                  horizontal: DesignSystem.spacingM,
-                ),
-              ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'El nombre es requerido';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: DesignSystem.spacingM),
-            Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: GestureDetector(
-                    onTap: _showCountryPicker,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: DesignSystem.spacingM,
-                        vertical: DesignSystem.spacingM,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: DesignSystem.textTertiary.withOpacity(0.3)),
-                        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _selectedCountry.flag,
-                            style: const TextStyle(fontSize: 20),
-                          ),
-                          const SizedBox(width: DesignSystem.spacingS),
-                          Text(
-                            _selectedCountry.dialCode,
-                            style: const TextStyle(
-                              color: DesignSystem.textPrimary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: DesignSystem.spacingS),
-                Expanded(
-                  flex: 3,
-                  child: TextFormField(
-                    controller: _phoneController,
-                    keyboardType: TextInputType.phone,
-                    decoration: InputDecoration(
-                      labelText: 'Teléfono',
-                      hintText: 'Número de teléfono',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: DesignSystem.surfaceColor,
-                      contentPadding: const EdgeInsets.symmetric(
-                        vertical: DesignSystem.spacingM,
-                        horizontal: DesignSystem.spacingM,
-                      ),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'El teléfono es requerido';
-                      }
-                      return null;
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text(
-            'Cancelar',
-            style: TextStyle(color: DesignSystem.textSecondary),
-          ),
-        ),
-        ElevatedButton(
-          onPressed: _addEmployee,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: DesignSystem.primaryColor,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-            ),
-          ),
-          child: const Text('Agregar'),
-        ),
-      ],
-    );
-  }
-}
-
-class _EditEmployeeDialog extends StatefulWidget {
-  final String ownerId;
-  final EmployeeModel employee;
-  final Function(EmployeeModel) onEmployeeUpdated;
-
-  const _EditEmployeeDialog({
-    required this.ownerId,
-    required this.employee,
-    required this.onEmployeeUpdated,
-  });
-
-  @override
-  State<_EditEmployeeDialog> createState() => _EditEmployeeDialogState();
-}
-
-class _EditEmployeeDialogState extends State<_EditEmployeeDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _userService = UserManagementService();
-  Country _selectedCountry = countries.firstWhere((c) => c.code == 'PE');
-
-  @override
-  void initState() {
-    super.initState();
-    _nameController.text = widget.employee.nombre;
-    _phoneController.text = widget.employee.telefono.replaceAll(RegExp(r'^\+\d+'), '');
-    // Extraer el código de país del teléfono
-    final phoneParts = widget.employee.telefono.split(' ');
-    if (phoneParts.isNotEmpty) {
-      final dialCode = phoneParts.first;
-      _selectedCountry = countries.firstWhere(
-        (c) => c.dialCode == dialCode,
-        orElse: () => countries.firstWhere((c) => c.code == 'PE'),
-      );
-    }
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _phoneController.dispose();
-    super.dispose();
-  }
-
-  void _showCountryPicker() {
-    showDialog(
-      context: context,
-      builder: (context) => CountryPicker(
-        onCountrySelected: (country) {
-          setState(() {
-            _selectedCountry = country;
-          });
-          Navigator.pop(context);
-        },
-      ),
-    );
-  }
-
-  Future<void> _updateEmployee() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    SnackBarHelper.showLoading(context, 'Actualizando empleado...');
-
-    try {
-      final response = await _userService.updateEmployeeForOwner(
-        widget.ownerId,
-        widget.employee.id,
-        nombre: _nameController.text,
-        telefono: '${_selectedCountry.dialCode}${_phoneController.text}',
-      );
-
-      if (response.isSuccess && response.data != null) {
-        widget.onEmployeeUpdated(response.data!);
-        Navigator.pop(context);
-        // Sin SnackBar de éxito para evitar latencia
-      } else {
-        SnackBarHelper.showError(context, ErrorHelper.processApiError(response));
-      }
-    } catch (e) {
-      SnackBarHelper.showError(context, 'Error al actualizar empleado: $e');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(DesignSystem.radiusL),
-      ),
-      title: const Text('Editar Empleado'),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _nameController,
-              decoration: InputDecoration(
-                labelText: 'Nombre',
-                hintText: 'Nombre del empleado',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-                  borderSide: BorderSide.none,
-                ),
-                filled: true,
-                fillColor: DesignSystem.surfaceColor,
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: DesignSystem.spacingM,
-                  horizontal: DesignSystem.spacingM,
-                ),
-              ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'El nombre es requerido';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: DesignSystem.spacingM),
-            Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: GestureDetector(
-                    onTap: _showCountryPicker,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: DesignSystem.spacingM,
-                        vertical: DesignSystem.spacingM,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: DesignSystem.textTertiary.withOpacity(0.3)),
-                        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _selectedCountry.flag,
-                            style: const TextStyle(fontSize: 20),
-                          ),
-                          const SizedBox(width: DesignSystem.spacingS),
-                          Text(
-                            _selectedCountry.dialCode,
-                            style: const TextStyle(
-                              color: DesignSystem.textPrimary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: DesignSystem.spacingS),
-                Expanded(
-                  flex: 3,
-                  child: TextFormField(
-                    controller: _phoneController,
-                    keyboardType: TextInputType.phone,
-                    decoration: InputDecoration(
-                      labelText: 'Teléfono',
-                      hintText: 'Número de teléfono',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: DesignSystem.surfaceColor,
-                      contentPadding: const EdgeInsets.symmetric(
-                        vertical: DesignSystem.spacingM,
-                        horizontal: DesignSystem.spacingM,
-                      ),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'El teléfono es requerido';
-                      }
-                      return null;
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text(
-            'Cancelar',
-            style: TextStyle(color: DesignSystem.textSecondary),
-          ),
-        ),
-        ElevatedButton(
-          onPressed: _updateEmployee,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: DesignSystem.primaryColor,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-            ),
-          ),
-          child: const Text('Actualizar'),
-        ),
-      ],
-    );
-  }
-}
-
-
-
-
-
-
-
-
-
-
-

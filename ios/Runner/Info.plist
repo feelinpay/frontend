@@ -55,9 +55,15 @@
 		<string>background-app-refresh</string>
 	</array>
 	
-	<!-- Permisos para notificaciones (solo para leer notificaciones de Yape) -->
+	<!-- Permisos para notificaciones (solo para leer notificaciones de Yape - Solo Android, pero mantenemos descripción para review si se usara) -->
 	<key>NSUserNotificationsUsageDescription</key>
-	<string>Feelin Pay necesita leer notificaciones de pagos de Yape (Perú) para detectar transacciones automáticamente.</string>
+	<string>Feelin Pay necesita acceso a notificaciones para alertarte sobre estados de pago.</string>
+
+	<!-- Permisos para Cámara y Galería (Alternativa iOS para leer constancias de Yape) -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Feelin Pay necesita acceso a tu galería para subir comprobantes de pago de Yape.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Feelin Pay necesita acceso a tu cámara para tomar fotos de comprobantes de pago.</string>
 	
 	<!-- Permisos para SMS (iOS no permite acceso directo a SMS, pero se puede enviar) -->
 	<key>NSMessageUsageDescription</key>

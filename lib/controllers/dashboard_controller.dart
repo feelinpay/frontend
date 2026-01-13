@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/feelin_pay_service.dart';
+import '../services/auth_service.dart';
 
 class DashboardController extends ChangeNotifier {
   Map<String, dynamic>? _userInfo;
@@ -18,20 +19,21 @@ class DashboardController extends ChangeNotifier {
 
   Future<void> loadUserData() async {
     try {
-      final userInfo = await FeelinPayService.getProfile();
+      final response = await AuthService().getProfile();
 
-      if (userInfo.containsKey('error') || userInfo['user'] == null) {
-        await FeelinPayService.logout();
+      if (!response.isSuccess || response.data == null) {
+        await AuthService().logout();
         return;
       }
 
-      _userInfo = userInfo['user'];
+      _userInfo = response.data!
+          .toJson(); // AuthService returns UserModel, converting to Map for compatibility
       notifyListeners();
 
       await loadEstadisticas();
       await verificarBotonPrueba();
     } catch (e) {
-      await FeelinPayService.logout();
+      await AuthService().logout();
     } finally {
       _isLoading = false;
       notifyListeners();

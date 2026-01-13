@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
+import '../services/api_service.dart';
 import '../database/local_database.dart';
 import '../services/session_service.dart';
-import '../core/config/app_config.dart';
 
 class BackgroundService {
   static Timer? _connectivityTimer;
@@ -14,7 +14,7 @@ class BackgroundService {
     if (_isRunning) return;
 
     _isRunning = true;
-    print('🔄 Iniciando servicio en segundo plano');
+    debugPrint('🔄 Iniciando servicio en segundo plano');
 
     // Verificar conectividad cada 30 segundos
     _connectivityTimer = Timer.periodic(const Duration(seconds: 30), (
@@ -38,27 +38,28 @@ class BackgroundService {
     _isRunning = false;
     _connectivityTimer?.cancel();
     _sessionTimer?.cancel();
-    print('⏹️ Deteniendo servicio en segundo plano');
+    debugPrint('⏹️ Deteniendo servicio en segundo plano');
   }
 
   // Verificar conectividad
   static Future<void> _checkConnectivity() async {
     try {
-      // Simple connectivity check - try to reach the backend
-      final response = await http
-          .get(
-            Uri.parse('${AppConfig.apiBaseUrl}/public/health'),
-            headers: {'Content-Type': 'application/json'},
-          )
-          .timeout(const Duration(seconds: 5));
+      // 1. Check Internet (Google)
+      /* 
+      // NOTE: Skipping Google check for now as it might be blocked in some emulator envs
+      // focusing on backend connectivity which is what matters for the app.
+      */
 
-      if (response.statusCode == 200) {
-        print('✅ Conexión a Internet activa');
-      } else {
-        print('⚠️ Sin conexión a Internet');
+      // 2. Check Backend
+      final response = await ApiService()
+          .get('/public/health')
+          .timeout(const Duration(seconds: 15)); // Extended timeout
+
+      if (response.isSuccess) {
+        // Log removed
       }
     } catch (e) {
-      print('⚠️ Sin conexión a Internet: $e');
+      // Error silenced
     }
   }
 
@@ -68,12 +69,12 @@ class BackgroundService {
       final hasSession = await SessionService.isLoggedIn();
       if (hasSession) {
         await SessionService.keepSessionAlive();
-        print('✅ Sesión mantenida activa');
+        // debugPrint('✅ Sesión mantenida activa');
       } else {
-        print('⚠️ No hay sesión activa');
+        // debugPrint('⚠️ No hay sesión activa');
       }
     } catch (e) {
-      print('❌ Error manteniendo sesión: $e');
+      // Error silenced
     }
   }
 
@@ -82,9 +83,7 @@ class BackgroundService {
     try {
       final notifications = await LocalDatabase.getNotificacionesPendientes();
       if (notifications.isNotEmpty) {
-        print(
-          '📱 Procesando ${notifications.length} notificaciones pendientes',
-        );
+        // debugPrint('📱 Procesando ${notifications.length} notificaciones pendientes');
 
         for (var notification in notifications) {
           await LocalDatabase.procesarNotificacionYape(
@@ -94,7 +93,7 @@ class BackgroundService {
         }
       }
     } catch (e) {
-      print('❌ Error procesando notificaciones: $e');
+      // Error silenced
     }
   }
 
@@ -102,9 +101,8 @@ class BackgroundService {
   static Future<void> processPendingSMS() async {
     try {
       await LocalDatabase.enviarSMSPendientes();
-      print('📨 SMS pendientes procesados');
     } catch (e) {
-      print('❌ Error procesando SMS: $e');
+      // Error silenced
     }
   }
 

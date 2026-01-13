@@ -1,0 +1,298 @@
+import 'package:flutter/material.dart';
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
+import '../core/design/design_system.dart';
+import '../services/user_management_service.dart';
+import '../models/employee_model.dart';
+import '../views/country_picker.dart';
+import '../widgets/snackbar_helper.dart';
+import '../utils/error_helper.dart';
+
+class EditEmployeeDialog extends StatefulWidget {
+  final String ownerId;
+  final EmployeeModel employee;
+  final Function(EmployeeModel) onEmployeeUpdated;
+
+  const EditEmployeeDialog({
+    super.key,
+    required this.ownerId,
+    required this.employee,
+    required this.onEmployeeUpdated,
+  });
+
+  @override
+  State<EditEmployeeDialog> createState() => _EditEmployeeDialogState();
+}
+
+class _EditEmployeeDialogState extends State<EditEmployeeDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _nameController;
+  late TextEditingController _phoneController;
+  final _userService = UserManagementService();
+
+  final _phoneFormatter = MaskTextInputFormatter(
+    mask: '### ### ###',
+    filter: {"#": RegExp(r'[0-9]')},
+    type: MaskAutoCompletionType.lazy,
+  );
+
+  Country _selectedCountry = Country(
+    name: 'Perú',
+    code: 'PE',
+    dialCode: '+51',
+    flag: '🇵🇪',
+  );
+
+  bool _isLoading = false;
+  late bool _activo;
+
+  // Lista 'quick' para fallback
+  final List<Country> _knownCountries = [
+    Country(name: 'Perú', code: 'PE', dialCode: '+51', flag: '🇵🇪'),
+    Country(name: 'Bolivia', code: 'BO', dialCode: '+591', flag: '🇧🇴'),
+    Country(name: 'Chile', code: 'CL', dialCode: '+56', flag: '🇨🇱'),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _activo = widget.employee.activo;
+    _nameController = TextEditingController(text: widget.employee.nombre);
+
+    // Parse phone number
+    String phone = widget.employee.telefono;
+    String initialNumber = phone;
+
+    // Intentar matchear con los conocidos
+    for (var country in _knownCountries) {
+      if (phone.startsWith(country.dialCode)) {
+        initialNumber = phone.substring(country.dialCode.length).trim();
+        _selectedCountry = country;
+        break;
+      }
+    }
+
+    // Apply mask to initial value
+    final formattedInitial = _phoneFormatter.maskText(initialNumber);
+    _phoneController = TextEditingController(text: formattedInitial);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  void _showCountryPicker() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        child: SizedBox(
+          height: 500,
+          child: CountryPicker(
+            onCountrySelected: (country) {
+              setState(() {
+                _selectedCountry = country;
+              });
+              Navigator.pop(context);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Clean phone number (remove spaces)
+      final cleanPhone = _phoneFormatter.getUnmaskedText();
+
+      final response = await _userService.updateEmployeeForOwner(
+        widget.ownerId,
+        widget.employee.id,
+        nombre: _nameController.text,
+        telefono: '${_selectedCountry.dialCode}$cleanPhone',
+        activo: _activo,
+      );
+
+      if (!mounted) return;
+
+      if (response.isSuccess && response.data != null) {
+        widget.onEmployeeUpdated(response.data!);
+        Navigator.pop(context);
+        SnackBarHelper.showSuccess(
+          context,
+          'Empleado actualizado exitosamente',
+        );
+      } else {
+        SnackBarHelper.showError(
+          context,
+          ErrorHelper.processApiError(response),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Error al actualizar empleado: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(DesignSystem.radiusL),
+      ),
+      title: const Text('Editar Empleado'),
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _nameController,
+                decoration: InputDecoration(
+                  labelText: 'Nombre',
+                  hintText: 'Nombre completo',
+                  helperText: ' ',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                  fillColor: DesignSystem.surfaceColor,
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: DesignSystem.spacingM,
+                    horizontal: DesignSystem.spacingM,
+                  ),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'El nombre es requerido';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: DesignSystem.spacingM),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  GestureDetector(
+                    onTap: _showCountryPicker,
+                    child: Container(
+                      width: 100,
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: DesignSystem.spacingS,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: DesignSystem.textTertiary.withValues(
+                            alpha: 0.3,
+                          ),
+                        ),
+                        borderRadius: BorderRadius.circular(
+                          DesignSystem.radiusM,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            _selectedCountry.flag,
+                            style: const TextStyle(fontSize: 20),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _selectedCountry.dialCode,
+                            style: const TextStyle(
+                              color: DesignSystem.textPrimary,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: DesignSystem.spacingS),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: [_phoneFormatter],
+                      maxLines: 1, // Prevent height expansion
+                      decoration: InputDecoration(
+                        labelText: 'Teléfono',
+                        helperText: ' ',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(
+                            DesignSystem.radiusM,
+                          ),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: DesignSystem.surfaceColor,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: DesignSystem.spacingM,
+                          horizontal: DesignSystem.spacingM,
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Requerido';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isLoading ? null : () => Navigator.pop(context),
+          child: const Text(
+            'Cancelar',
+            style: TextStyle(color: DesignSystem.textSecondary),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: _isLoading ? null : _submit,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: DesignSystem.primaryColor,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+            ),
+          ),
+          child: _isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text('Actualizar'),
+        ),
+      ],
+    );
+  }
+}

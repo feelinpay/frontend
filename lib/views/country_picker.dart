@@ -53,35 +53,8 @@ class _CountryPickerState extends State<CountryPicker> {
   void _loadCountries() {
     countries = [
       Country(name: 'Perú', code: 'PE', dialCode: '+51', flag: '🇵🇪'),
-      Country(name: 'Estados Unidos', code: 'US', dialCode: '+1', flag: '🇺🇸'),
-      Country(name: 'México', code: 'MX', dialCode: '+52', flag: '🇲🇽'),
-      Country(name: 'Colombia', code: 'CO', dialCode: '+57', flag: '🇨🇴'),
-      Country(name: 'Argentina', code: 'AR', dialCode: '+54', flag: '🇦🇷'),
-      Country(name: 'Chile', code: 'CL', dialCode: '+56', flag: '🇨🇱'),
-      Country(name: 'Brasil', code: 'BR', dialCode: '+55', flag: '🇧🇷'),
-      Country(name: 'Ecuador', code: 'EC', dialCode: '+593', flag: '🇪🇨'),
       Country(name: 'Bolivia', code: 'BO', dialCode: '+591', flag: '🇧🇴'),
-      Country(name: 'Paraguay', code: 'PY', dialCode: '+595', flag: '🇵🇾'),
-      Country(name: 'Uruguay', code: 'UY', dialCode: '+598', flag: '🇺🇾'),
-      Country(name: 'Venezuela', code: 'VE', dialCode: '+58', flag: '🇻🇪'),
-      Country(name: 'España', code: 'ES', dialCode: '+34', flag: '🇪🇸'),
-      Country(name: 'Francia', code: 'FR', dialCode: '+33', flag: '🇫🇷'),
-      Country(name: 'Alemania', code: 'DE', dialCode: '+49', flag: '🇩🇪'),
-      Country(name: 'Italia', code: 'IT', dialCode: '+39', flag: '🇮🇹'),
-      Country(name: 'Reino Unido', code: 'GB', dialCode: '+44', flag: '🇬🇧'),
-      Country(name: 'Canadá', code: 'CA', dialCode: '+1', flag: '🇨🇦'),
-      Country(name: 'Australia', code: 'AU', dialCode: '+61', flag: '🇦🇺'),
-      Country(name: 'Japón', code: 'JP', dialCode: '+81', flag: '🇯🇵'),
-      Country(name: 'China', code: 'CN', dialCode: '+86', flag: '🇨🇳'),
-      Country(name: 'India', code: 'IN', dialCode: '+91', flag: '🇮🇳'),
-      Country(name: 'Rusia', code: 'RU', dialCode: '+7', flag: '🇷🇺'),
-      Country(name: 'Sudáfrica', code: 'ZA', dialCode: '+27', flag: '🇿🇦'),
-      Country(name: 'Egipto', code: 'EG', dialCode: '+20', flag: '🇪🇬'),
-      Country(name: 'Nigeria', code: 'NG', dialCode: '+234', flag: '🇳🇬'),
-      Country(name: 'Kenia', code: 'KE', dialCode: '+254', flag: '🇰🇪'),
-      Country(name: 'Marruecos', code: 'MA', dialCode: '+212', flag: '🇲🇦'),
-      Country(name: 'Túnez', code: 'TN', dialCode: '+216', flag: '🇹🇳'),
-      Country(name: 'Argelia', code: 'DZ', dialCode: '+213', flag: '🇩🇿'),
+      Country(name: 'Chile', code: 'CL', dialCode: '+56', flag: '🇨🇱'),
     ];
 
     countries.sort((a, b) => a.name.compareTo(b.name));
@@ -94,10 +67,12 @@ class _CountryPickerState extends State<CountryPicker> {
         filteredCountries = countries;
       } else {
         filteredCountries = countries
-            .where((country) =>
-                country.name.toLowerCase().contains(query.toLowerCase()) ||
-                country.code.toLowerCase().contains(query.toLowerCase()) ||
-                country.dialCode.contains(query))
+            .where(
+              (country) =>
+                  country.name.toLowerCase().contains(query.toLowerCase()) ||
+                  country.code.toLowerCase().contains(query.toLowerCase()) ||
+                  country.dialCode.contains(query),
+            )
             .toList();
       }
     });
@@ -105,62 +80,104 @@ class _CountryPickerState extends State<CountryPicker> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      title: widget.showHeader
-          ? const Text(
-              'Seleccionar País',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            )
-          : null,
-      content: SizedBox(
-        width: double.maxFinite,
-        height: 400,
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      child: SizedBox(
+        height: 500,
         child: Column(
           children: [
             if (widget.showHeader) ...[
-              TextField(
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                child: Row(
+                  children: [
+                    const Text(
+                      'Seleccionar País',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black, // Ensure text is visible
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: TextField(
                 controller: searchController,
                 onChanged: _filterCountries,
                 decoration: InputDecoration(
                   hintText: 'Buscar país...',
                   prefixIcon: const Icon(Icons.search),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: Colors.grey.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: Colors.grey.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: Colors.deepPurple,
+                      width: 2,
+                    ),
                   ),
                   contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
+                    horizontal: 16,
+                    vertical: 12,
                   ),
+                  filled: true,
+                  fillColor: Colors.grey.withValues(alpha: 0.1),
                 ),
               ),
-              const SizedBox(height: 16),
-            ],
+            ),
+            const SizedBox(height: 10),
             Expanded(
               child: ListView.builder(
                 itemCount: filteredCountries.length,
+                padding: const EdgeInsets.only(bottom: 20),
                 itemBuilder: (context, index) {
                   final country = filteredCountries[index];
                   return ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 4,
+                    ),
                     leading: Text(
                       country.flag,
-                      style: const TextStyle(fontSize: 24),
+                      style: const TextStyle(fontSize: 28),
                     ),
                     title: Text(
                       country.name,
                       style: const TextStyle(
                         fontWeight: FontWeight.w500,
+                        fontSize: 16,
                       ),
                     ),
-                    subtitle: Text(country.dialCode),
+                    subtitle: Text(
+                      country.dialCode,
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
                     onTap: () {
                       widget.onCountrySelected(country);
-                      Navigator.of(context).pop();
                     },
                   );
                 },
@@ -182,33 +199,6 @@ class _CountryPickerState extends State<CountryPicker> {
 // Lista global de países para uso en otros widgets
 final List<Country> countries = [
   Country(name: 'Perú', code: 'PE', dialCode: '+51', flag: '🇵🇪'),
-  Country(name: 'Estados Unidos', code: 'US', dialCode: '+1', flag: '🇺🇸'),
-  Country(name: 'México', code: 'MX', dialCode: '+52', flag: '🇲🇽'),
-  Country(name: 'Colombia', code: 'CO', dialCode: '+57', flag: '🇨🇴'),
-  Country(name: 'Argentina', code: 'AR', dialCode: '+54', flag: '🇦🇷'),
-  Country(name: 'Chile', code: 'CL', dialCode: '+56', flag: '🇨🇱'),
-  Country(name: 'Brasil', code: 'BR', dialCode: '+55', flag: '🇧🇷'),
-  Country(name: 'Ecuador', code: 'EC', dialCode: '+593', flag: '🇪🇨'),
   Country(name: 'Bolivia', code: 'BO', dialCode: '+591', flag: '🇧🇴'),
-  Country(name: 'Paraguay', code: 'PY', dialCode: '+595', flag: '🇵🇾'),
-  Country(name: 'Uruguay', code: 'UY', dialCode: '+598', flag: '🇺🇾'),
-  Country(name: 'Venezuela', code: 'VE', dialCode: '+58', flag: '🇻🇪'),
-  Country(name: 'España', code: 'ES', dialCode: '+34', flag: '🇪🇸'),
-  Country(name: 'Francia', code: 'FR', dialCode: '+33', flag: '🇫🇷'),
-  Country(name: 'Alemania', code: 'DE', dialCode: '+49', flag: '🇩🇪'),
-  Country(name: 'Italia', code: 'IT', dialCode: '+39', flag: '🇮🇹'),
-  Country(name: 'Reino Unido', code: 'GB', dialCode: '+44', flag: '🇬🇧'),
-  Country(name: 'Canadá', code: 'CA', dialCode: '+1', flag: '🇨🇦'),
-  Country(name: 'Australia', code: 'AU', dialCode: '+61', flag: '🇦🇺'),
-  Country(name: 'Japón', code: 'JP', dialCode: '+81', flag: '🇯🇵'),
-  Country(name: 'China', code: 'CN', dialCode: '+86', flag: '🇨🇳'),
-  Country(name: 'India', code: 'IN', dialCode: '+91', flag: '🇮🇳'),
-  Country(name: 'Rusia', code: 'RU', dialCode: '+7', flag: '🇷🇺'),
-  Country(name: 'Sudáfrica', code: 'ZA', dialCode: '+27', flag: '🇿🇦'),
-  Country(name: 'Egipto', code: 'EG', dialCode: '+20', flag: '🇪🇬'),
-  Country(name: 'Nigeria', code: 'NG', dialCode: '+234', flag: '🇳🇬'),
-  Country(name: 'Kenia', code: 'KE', dialCode: '+254', flag: '🇰🇪'),
-  Country(name: 'Marruecos', code: 'MA', dialCode: '+212', flag: '🇲🇦'),
-  Country(name: 'Túnez', code: 'TN', dialCode: '+216', flag: '🇹🇳'),
-  Country(name: 'Argelia', code: 'DZ', dialCode: '+213', flag: '🇩🇿'),
+  Country(name: 'Chile', code: 'CL', dialCode: '+56', flag: '🇨🇱'),
 ];

@@ -8,12 +8,12 @@ class ResponsiveContainer extends StatelessWidget {
   final bool center;
 
   const ResponsiveContainer({
-    Key? key,
+    super.key,
     required this.child,
     this.maxWidth,
     this.padding,
     this.center = true,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -55,13 +55,13 @@ class ResponsiveGrid extends StatelessWidget {
   final double? childAspectRatio;
 
   const ResponsiveGrid({
-    Key? key,
+    super.key,
     required this.children,
     this.spacing = DesignSystem.spacingM,
     this.runSpacing = DesignSystem.spacingM,
     this.crossAxisCount,
     this.childAspectRatio,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -93,7 +93,7 @@ class ResponsiveCard extends StatelessWidget {
   final VoidCallback? onTap;
 
   const ResponsiveCard({
-    Key? key,
+    super.key,
     required this.child,
     this.padding,
     this.margin,
@@ -101,7 +101,7 @@ class ResponsiveCard extends StatelessWidget {
     this.shadow,
     this.borderRadius,
     this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -139,7 +139,7 @@ class ResponsiveButton extends StatelessWidget {
   final ButtonSize size;
 
   const ResponsiveButton({
-    Key? key,
+    super.key,
     required this.text,
     this.onPressed,
     this.icon,
@@ -147,7 +147,7 @@ class ResponsiveButton extends StatelessWidget {
     this.isFullWidth = true,
     this.type = ButtonType.primary,
     this.size = ButtonSize.medium,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -250,7 +250,7 @@ class ResponsiveInput extends StatelessWidget {
   final VoidCallback? onTap;
 
   const ResponsiveInput({
-    Key? key,
+    super.key,
     this.label,
     this.hint,
     this.controller,
@@ -262,7 +262,7 @@ class ResponsiveInput extends StatelessWidget {
     this.maxLines = 1,
     this.enabled = true,
     this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -312,14 +312,14 @@ class ResponsiveAppBar extends StatelessWidget implements PreferredSizeWidget {
   final Color? foregroundColor;
 
   const ResponsiveAppBar({
-    Key? key,
+    super.key,
     required this.title,
     this.actions,
     this.leading,
     this.centerTitle = false,
     this.backgroundColor,
     this.foregroundColor,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -362,13 +362,13 @@ class ResponsiveText extends StatelessWidget {
 
   const ResponsiveText(
     this.text, {
-    Key? key,
+    super.key,
     this.style,
     this.textAlign,
     this.maxLines,
     this.overflow,
     this.type = TextType.body,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

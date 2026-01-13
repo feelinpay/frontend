@@ -13,21 +13,29 @@ class DesignSystem {
   static const Color primaryDark = Color(0xFF7C3AED); // Morado oscuro
   static const Color secondaryColor = Color(0xFF8B5CF6);
   static const Color accentColor = Color(0xFF8B5CF6); // Lila para acentos
-  static const Color errorColor = Color(0xFFEF4444); // Rojo para errores (mantener)
-  static const Color warningColor = Color(0xFFA855F7); // Lila claro para advertencias
+  static const Color errorColor = Color(
+    0xFFEF4444,
+  ); // Rojo para errores (mantener)
+  static const Color warningColor = Color(
+    0xFFA855F7,
+  ); // Lila claro para advertencias
   static const Color successColor = Color(0xFF8B5CF6); // Lila para éxito
 
   // Colores de fondo - Basados en el diseño de la imagen
   static const Color backgroundColor = Color(0xFFFFFFFF); // Blanco puro
   static const Color surfaceColor = Color(0xFFFFFFFF);
   static const Color cardColor = Color(0xFFFFFFFF);
-  static const Color bottomNavColor = Color(0xFF2D3748); // Gris oscuro para navegación inferior
+  static const Color bottomNavColor = Color(
+    0xFF2D3748,
+  ); // Gris oscuro para navegación inferior
 
   // Colores de texto - Basados en el diseño de la imagen
   static const Color textPrimary = Color(0xFF2D3748); // Gris oscuro
   static const Color textSecondary = Color(0xFF64748B);
   static const Color textTertiary = Color(0xFF94A3B8);
-  static const Color textLight = Color(0xFF9CA3AF); // Gris claro para placeholders
+  static const Color textLight = Color(
+    0xFF9CA3AF,
+  ); // Gris claro para placeholders
 
   // Espaciado
   static const double spacingXS = 4.0;
@@ -293,10 +301,14 @@ class DesignSystem {
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-        systemNavigationBarColor: Colors.white,
-        systemNavigationBarIconBrightness: Brightness.dark,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarColor:
+            Colors.black, // Cambiado de transparente para evitar problemas
+        systemNavigationBarDividerColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.light,
       ),
     );
+    // Activa el modo edge-to-edge real (Android 10+)
+    // SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); // Comentado temporalmente para estabilidad
   }
 }

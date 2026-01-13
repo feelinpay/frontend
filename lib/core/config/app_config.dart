@@ -3,12 +3,10 @@ import 'package:flutter/foundation.dart';
 /// Configuración de la aplicación
 class AppConfig {
   // Configuración del servidor backend
-  // Usar 10.0.2.2 para emulador Android (localhost del host)
-  // Usar localhost para desarrollo web/desktop
-  static const String apiBaseUrl = 'http://localhost:3001/api';
+  static const String apiBaseUrl = 'http://10.0.2.2:3001/api';
 
   // Configuración de CORS (para desarrollo)
-  static const String corsOrigin = 'http://localhost:3001';
+  static const String corsOrigin = 'http://10.0.2.2:3001';
 
   // Configuración de timeout
   static const Duration requestTimeout = Duration(seconds: 30);
@@ -118,7 +116,7 @@ class AppConfig {
 
   // Configuración de testing
   static const bool isTesting = false;
-  static const String testApiUrl = 'http://localhost:3001/api';
+  static const String testApiUrl = 'http://10.0.2.2:3001/api';
 
   // Métodos de utilidad
   static String getFullUrl(String endpoint) {

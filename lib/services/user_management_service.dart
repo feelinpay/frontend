@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../models/user_model.dart';
 import '../models/employee_model.dart';
 import '../models/api_response.dart' as api_models;
@@ -5,7 +6,8 @@ import '../core/config/app_config.dart';
 import 'api_service.dart';
 
 class UserManagementService {
-  static final UserManagementService _instance = UserManagementService._internal();
+  static final UserManagementService _instance =
+      UserManagementService._internal();
   factory UserManagementService() => _instance;
   UserManagementService._internal();
 
@@ -23,10 +25,7 @@ class UserManagementService {
     String? rol,
     bool? activo,
   }) async {
-    final queryParams = <String, dynamic>{
-      'page': page,
-      'limit': limit,
-    };
+    final queryParams = <String, dynamic>{'page': page, 'limit': limit};
 
     if (search != null && search.isNotEmpty) {
       queryParams['search'] = search;
@@ -45,19 +44,13 @@ class UserManagementService {
       queryParameters: queryParams,
     );
 
-    print('🔍 [UserManagementService] getAllUsers response:');
-    print('  Success: ${response.isSuccess}');
-    print('  Message: ${response.message}');
-    print('  Status Code: ${response.statusCode}');
-    print('  Data: ${response.data}');
+    // Logs removed for optimization
 
     if (response.isSuccess && response.data != null) {
       final data = response.data!;
       // El backend devuelve los datos en data.usuarios
       final usersList = data['usuarios'] as List<dynamic>? ?? [];
-      
-      print('🔍 [UserManagementService] Users list length: ${usersList.length}');
-      
+
       final users = usersList
           .map((json) => UserModel.fromJson(json as Map<String, dynamic>))
           .toList();
@@ -104,20 +97,12 @@ class UserManagementService {
   /// Crear nuevo usuario (solo Super Admin)
   Future<api_models.ApiResponse<UserModel>> createUser({
     required String nombre,
-    required String telefono,
     required String email,
-    required String password,
     required String rolId,
   }) async {
     final response = await _apiService.post<Map<String, dynamic>>(
       '${AppConfig.superAdminEndpoint}/users',
-      data: {
-        'nombre': nombre,
-        'telefono': telefono,
-        'email': email,
-        'password': password,
-        'rolId': rolId,
-      },
+      data: {'nombre': nombre, 'email': email, 'rolId': rolId},
     );
 
     if (response.isSuccess && response.data != null) {
@@ -141,15 +126,13 @@ class UserManagementService {
   Future<api_models.ApiResponse<UserModel>> updateUser(
     String id, {
     String? nombre,
-    String? telefono,
     String? email,
     String? rolId,
     bool? activo,
   }) async {
     final data = <String, dynamic>{};
-    
+
     if (nombre != null) data['nombre'] = nombre;
-    if (telefono != null) data['telefono'] = telefono;
     if (email != null) data['email'] = email;
     if (rolId != null) data['rolId'] = rolId;
     if (activo != null) data['activo'] = activo;
@@ -177,7 +160,9 @@ class UserManagementService {
   }
 
   /// Eliminar usuario (solo Super Admin)
-  Future<api_models.ApiResponse<Map<String, dynamic>>> deleteUser(String id) async {
+  Future<api_models.ApiResponse<Map<String, dynamic>>> deleteUser(
+    String id,
+  ) async {
     final response = await _apiService.delete<Map<String, dynamic>>(
       '${AppConfig.superAdminEndpoint}/users/$id',
     );
@@ -234,10 +219,7 @@ class UserManagementService {
     String? search,
     bool? activo,
   }) async {
-    final queryParams = <String, dynamic>{
-      'page': page,
-      'limit': limit,
-    };
+    final queryParams = <String, dynamic>{'page': page, 'limit': limit};
 
     if (search != null && search.isNotEmpty) {
       queryParams['search'] = search;
@@ -247,19 +229,12 @@ class UserManagementService {
       queryParams['activo'] = activo;
     }
 
-    print('🔍 [UserManagementService] getEmployeesByOwner - Owner ID: $ownerId');
-    print('🔍 [UserManagementService] Query params: $queryParams');
-    
+    // Logs removed for optimization
+
     final response = await _apiService.get<Map<String, dynamic>>(
       '${AppConfig.superAdminEndpoint}/users/$ownerId/employees',
       queryParameters: queryParams,
     );
-
-    print('🔍 [UserManagementService] getEmployeesByOwner response:');
-    print('  Success: ${response.isSuccess}');
-    print('  Message: ${response.message}');
-    print('  Status Code: ${response.statusCode}');
-    print('  Data: ${response.data}');
 
     if (response.isSuccess && response.data != null) {
       final data = response.data!;
@@ -297,9 +272,11 @@ class UserManagementService {
           }
         }
       }
-      
-      print('🔍 [UserManagementService] Employees list length: ${employeesList.length}');
-      
+
+      debugPrint(
+        '🔍 [UserManagementService] Employees list length: ${employeesList.length}',
+      );
+
       final employees = employeesList
           .map((json) => EmployeeModel.fromJson(json as Map<String, dynamic>))
           .toList();
@@ -328,17 +305,14 @@ class UserManagementService {
   }) async {
     final response = await _apiService.post<Map<String, dynamic>>(
       '${AppConfig.superAdminEndpoint}/users/$ownerId/employees',
-      data: {
-        'nombre': nombre,
-        'telefono': telefono,
-      },
+      data: {'nombre': nombre, 'telefono': telefono},
     );
 
     if (response.isSuccess && response.data != null) {
       final data = response.data!;
       // El backend devuelve los datos en data.empleado
       final empleadoData = data['empleado'] as Map<String, dynamic>?;
-      
+
       if (empleadoData != null) {
         return api_models.ApiResponse<EmployeeModel>(
           success: true,
@@ -366,7 +340,7 @@ class UserManagementService {
     bool? activo,
   }) async {
     final data = <String, dynamic>{};
-    
+
     if (nombre != null) data['nombre'] = nombre;
     if (telefono != null) data['telefono'] = telefono;
     if (activo != null) data['activo'] = activo;
@@ -401,9 +375,7 @@ class UserManagementService {
   ) async {
     final response = await _apiService.put<Map<String, dynamic>>(
       '${AppConfig.superAdminEndpoint}/users/$ownerId/employees/$employeeId',
-      data: {
-        'activo': newState,
-      },
+      data: {'activo': newState},
     );
 
     if (response.isSuccess && response.data != null) {
@@ -480,12 +452,28 @@ class UserManagementService {
 
   /// Obtener todos los roles disponibles
   Future<api_models.ApiResponse<List<Map<String, dynamic>>>> getRoles() async {
-    final response = await _apiService.get<List<dynamic>>(
+    final response = await _apiService.get<Map<String, dynamic>>(
       '${AppConfig.superAdminEndpoint}/roles',
     );
 
     if (response.isSuccess && response.data != null) {
-      final roles = response.data!
+      final data = response.data!;
+      List<dynamic> rolesList = [];
+
+      if (data.containsKey('roles')) {
+        rolesList = data['roles'] as List<dynamic>;
+      } else if (data.containsKey('data')) {
+        final innerData = data['data'];
+        if (innerData is Map && innerData.containsKey('roles')) {
+          rolesList = innerData['roles'] as List<dynamic>;
+        } else if (innerData is List) {
+          rolesList = innerData;
+        }
+      } else if (data is List) {
+        rolesList = data as List<dynamic>;
+      }
+
+      final roles = rolesList
           .map((json) => json as Map<String, dynamic>)
           .toList();
 
@@ -515,11 +503,7 @@ class UserManagementService {
       '${AppConfig.superAdminEndpoint}/estadisticas-generales',
     );
 
-    print('🔍 [UserManagementService] getStatistics response:');
-    print('  Success: ${response.isSuccess}');
-    print('  Message: ${response.message}');
-    print('  Status Code: ${response.statusCode}');
-    print('  Data: ${response.data}');
+    // Logs removed for optimization
 
     if (response.isSuccess && response.data != null) {
       // El backend devuelve las estadísticas directamente en response.data
