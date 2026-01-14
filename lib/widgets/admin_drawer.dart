@@ -56,26 +56,46 @@ class AdminDrawer extends StatelessWidget {
         children: [
           // HEADER (Fixed)
           UserAccountsDrawerHeader(
+            currentAccountPictureSize: const Size.square(
+              54,
+            ), // Reduced from default 72
             decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF8B5CF6), Color(0xFFA855F7)],
-              ),
+              color:
+                  DesignSystem.primaryColor, // Solid color instead of gradient
             ),
             accountName: Text(
               user?.nombre ?? 'Administrador',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-            accountEmail: Text(user?.email ?? ''),
+            accountEmail: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(user?.email ?? ''),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    _getRoleName(user?.rol),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
             currentAccountPicture: CircleAvatar(
               backgroundColor: Colors.white,
               foregroundImage: user?.imagen != null && user!.imagen!.isNotEmpty
-                  ? ResizeImage(
-                      NetworkImage(user!.imagen!),
-                      width: 150,
-                      policy: ResizeImagePolicy.fit,
-                    )
+                  ? NetworkImage(user!.imagen!)
                   : null,
               child: (user?.nombre != null && user!.nombre.isNotEmpty)
                   ? Text(
@@ -215,6 +235,19 @@ class AdminDrawer extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _getRoleName(String? role) {
+    switch (role?.toLowerCase()) {
+      case 'super_admin':
+        return 'Super Administrador';
+      case 'propietario':
+        return 'Dueño de Negocio';
+      case 'empleado':
+        return 'Empleado';
+      default:
+        return 'Usuario';
+    }
   }
 
   // Helper to map module keys to Icons

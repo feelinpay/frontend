@@ -7,6 +7,7 @@ import '../widgets/three_dots_menu_widget.dart';
 import '../widgets/admin_drawer.dart';
 import '../core/widgets/responsive_widgets.dart';
 import '../services/user_management_service.dart';
+import '../services/payment_notification_service.dart';
 
 class SuperAdminDashboard extends StatefulWidget {
   const SuperAdminDashboard({super.key});
@@ -29,6 +30,30 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   void initState() {
     super.initState();
     _loadStatistics();
+    _startBackgroundServices();
+  }
+
+  Future<void> _startBackgroundServices() async {
+    try {
+      final authController = Provider.of<AuthController>(
+        context,
+        listen: false,
+      );
+      final user = authController.currentUser;
+
+      if (user != null) {
+        debugPrint("🚀 SuperAdminDashboard: Starting background services...");
+        await PaymentNotificationService.init(user);
+
+        // Iniciar listener de notificaciones automáticamente
+        debugPrint(
+          "🎯 SuperAdminDashboard: Starting payment notification listener...",
+        );
+        await PaymentNotificationService.startListening();
+      }
+    } catch (e) {
+      debugPrint("❌ Error starting background services: $e");
+    }
   }
 
   // OPTIMIZATION: Removed _initializeAnimations and dispose() as they're no longer needed
@@ -74,8 +99,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         children: [
           // Header estandarizado con AppHeader
           AppHeader(
-            title: 'Feelin Pay',
-            subtitle: 'Bienvenido, ${currentUser?.nombre ?? 'Administrador'}',
+            title: 'Dashboard',
+            subtitle: 'Panel de administración',
             onMenuPressed: () => _scaffoldKey.currentState?.openDrawer(),
             menuItems: [
               ThreeDotsMenuItem(
@@ -151,12 +176,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   Widget _buildStatsSection() {
     final stats = _statistics ?? {};
 
-    final totalUsuarios = stats['totalUsuarios'] ?? 0;
     final totalAdmins = stats['totalAdmins'] ?? 0;
-    final totalPropietarios = (totalUsuarios - totalAdmins).clamp(
-      0,
-      totalUsuarios,
-    );
+    final totalPropietarios = stats['totalUsuarios'] ?? 0;
     final totalEmpleados = stats['totalEmpleados'] ?? 0;
 
     return Column(

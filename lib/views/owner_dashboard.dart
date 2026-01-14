@@ -9,7 +9,6 @@ import '../widgets/admin_drawer.dart';
 import '../core/widgets/responsive_widgets.dart';
 import '../services/payment_notification_service.dart';
 import '../services/sms_service.dart';
-import '../services/background_service.dart';
 
 class OwnerDashboard extends StatefulWidget {
   const OwnerDashboard({super.key});
@@ -56,7 +55,7 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
         await PaymentNotificationService.startListening();
 
         await SMSService.procesarSMSPendientes();
-        await BackgroundService.start();
+        // BackgroundService is now auto-started in main.dart
       }
     } catch (e) {
       // Siltently fail or log if needed, but don't crash dashboard
@@ -106,8 +105,8 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
         children: [
           // Header estandarizado con AppHeader
           AppHeader(
-            title: 'Feelin Pay',
-            subtitle: 'Bienvenido, ${currentUser?.nombre ?? 'Propietario'}',
+            title: 'Dashboard',
+            subtitle: 'Panel de control',
             onMenuPressed: () => _scaffoldKey.currentState?.openDrawer(),
             menuItems: [
               ThreeDotsMenuItem(

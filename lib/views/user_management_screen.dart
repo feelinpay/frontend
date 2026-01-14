@@ -252,21 +252,17 @@ class _UserManagementScreenState extends State<UserManagementScreen>
         leading: CircleAvatar(
           backgroundColor: _getUserColor(user.rol),
           backgroundImage: user.imagen != null && user.imagen!.isNotEmpty
-              ? ResizeImage(
-                  NetworkImage(user.imagen!),
-                  width: 100,
-                  policy: ResizeImagePolicy.fit,
-                )
+              ? NetworkImage(user.imagen!)
               : null,
-          child: user.imagen != null && user.imagen!.isNotEmpty
-              ? null
-              : Text(
+          child: user.imagen == null || user.imagen!.isEmpty
+              ? Text(
                   user.nombre.isNotEmpty ? user.nombre[0].toUpperCase() : 'U',
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                   ),
-                ),
+                )
+              : null,
         ),
         title: Row(
           children: [

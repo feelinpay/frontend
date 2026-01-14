@@ -64,6 +64,11 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!-- Servicio de Background Service (flutter_background_service) -->
+        <service
+            android:name="id.flutter.flutter_background_service.BackgroundService"
+            android:foregroundServiceType="dataSync" />
         
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'services/background_service.dart';
 import 'views/splash_screen.dart';
 import 'views/login_screen.dart';
 import 'views/system_permissions_screen.dart';
@@ -28,20 +29,22 @@ final DashboardController _dashboardController = DashboardController();
 final NotificationController _notificationController = NotificationController();
 final SystemController _systemController = SystemController();
 
+// ... imports
+// ... imports
+
 void main() async {
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+      await Firebase.initializeApp();
 
       try {
         debugPrint("🚀 Starting Feelin Pay Initialization...");
 
-        await Firebase.initializeApp();
-
         // Configurar UI básico
         DesignSystem.configureStatusBar();
 
-        // BLINDAJE: Reemplazar Pantalla Roja de la Muerte con UI Amigable
+        // BLINDAJE: Reemplazar Pantalla Roja de la Muerte
         ErrorWidget.builder = (FlutterErrorDetails details) {
           bool isDebug = false;
           assert(() {
@@ -49,10 +52,8 @@ void main() async {
             return true;
           }());
 
-          // En desarrollo queremos ver el error real
           if (isDebug) return ErrorWidget(details.exception);
 
-          // En producción mostramos pantalla de recuperación
           return Material(
             color: Colors.white,
             child: Center(
@@ -63,7 +64,7 @@ void main() async {
                     Icons.error_outline,
                     color: Colors.orange,
                     size: 60,
-                  ), // Removed external asset dependency for safety
+                  ),
                   const SizedBox(height: 20),
                   const Text(
                     'Algo salió mal inesperadamente',
@@ -121,6 +122,9 @@ Future<void> _initServices() async {
 
     debugPrint("🔐 Initializing AuthController...");
     await _authController.initialize();
+
+    debugPrint("🔄 Initializing Background Service...");
+    await BackgroundService.initialize();
 
     debugPrint("🏁 Services Ready.");
   } catch (e) {

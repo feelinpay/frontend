@@ -3,18 +3,22 @@ import '../core/design/design_system.dart';
 
 class ThreeDotsMenuWidget extends StatelessWidget {
   final List<ThreeDotsMenuItem> items;
+  final Color? iconColor; // NEW: Allow custom icon color
 
   const ThreeDotsMenuWidget({
     super.key,
     required this.items,
+    this.iconColor, // NEW: Optional icon color
   });
 
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<ThreeDotsMenuItem>(
-      icon: const Icon(
+      icon: Icon(
         Icons.more_vert,
-        color: DesignSystem.textSecondary,
+        color:
+            iconColor ??
+            DesignSystem.textSecondary, // Use custom color or default
         size: DesignSystem.iconSizeM,
       ),
       shape: RoundedRectangleBorder(
@@ -42,10 +46,7 @@ class ThreeDotsMenuWidget extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                if (item.trailing != null) ...[
-                  const Spacer(),
-                  item.trailing!,
-                ],
+                if (item.trailing != null) ...[const Spacer(), item.trailing!],
               ],
             ),
           );
@@ -75,4 +76,3 @@ class ThreeDotsMenuItem {
     this.trailing,
   });
 }
-

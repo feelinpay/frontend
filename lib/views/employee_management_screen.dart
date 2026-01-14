@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../widgets/app_header.dart';
 import '../widgets/admin_drawer.dart';
+import '../widgets/app_header.dart';
 import '../widgets/three_dots_menu_widget.dart';
 import '../services/employee_service.dart';
 import '../models/employee_model.dart';
@@ -22,33 +22,22 @@ class EmployeeManagementScreen extends StatefulWidget {
 }
 
 class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
-    with TickerProviderStateMixin, LoadingStateMixin {
+    with LoadingStateMixin {
   final EmployeeService _employeeService = EmployeeService();
   List<EmployeeModel> _employees = [];
   List<EmployeeModel> _filteredEmployees = [];
   bool _notificationsEnabled = true;
-  bool _isInitialLoading = false; // Separate state for initial body load
-  AnimationController? _animationController;
+  bool _isInitialLoading = false;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
     super.initState();
-    _initializeAnimations();
     _checkAuthAndLoadEmployees();
-  }
-
-  void _initializeAnimations() {
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
-    );
-    _animationController!.forward();
   }
 
   @override
   void dispose() {
-    _animationController?.dispose();
     super.dispose();
   }
 
@@ -281,6 +270,9 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
 
   @override
   Widget build(BuildContext context) {
+    final authController = Provider.of<AuthController>(context);
+    final currentUser = authController.currentUser;
+
     return LoadingOverlay(
       isLoading: isLoading,
       message: loadingMessage,
@@ -294,8 +286,8 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
           key: _scaffoldKey,
           backgroundColor: DesignSystem.backgroundColor,
           drawer: AdminDrawer(
-            user: Provider.of<AuthController>(context).currentUser,
-            authController: Provider.of<AuthController>(context, listen: false),
+            user: currentUser,
+            authController: authController,
           ),
           floatingActionButton: FloatingActionButton(
             onPressed: _showAddEmployeeDialog,
@@ -305,10 +297,10 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
           body: Column(
             children: [
               AppHeader(
-                title: 'Mis Empleados',
-                subtitle: 'Gestiona tu equipo de trabajo',
+                title: 'Empleados de Feelin Pay',
+                subtitle: '${_employees.length} empleados registrados',
                 onMenuPressed: () => _scaffoldKey.currentState?.openDrawer(),
-                showMenu: true,
+                showUserInfo: false,
                 menuItems: [
                   ThreeDotsMenuItem(
                     icon: Icons.refresh,
@@ -317,8 +309,8 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
                   ),
                 ],
               ),
-              _buildSearchBar(),
               _buildGlobalToggle(),
+              _buildSearchBar(),
               Expanded(child: _buildEmployeeList()),
             ],
           ),
@@ -378,7 +370,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
         child: Row(
           children: [
             const Icon(
-              Icons.notifications_active_outlined,
+              Icons.notifications_off_outlined,
               color: DesignSystem.primaryColor,
             ),
             const SizedBox(width: 12),
@@ -387,7 +379,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Notificaciones Globales',
+                    'Desactivar notificaciones a todos',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   Text(
@@ -453,115 +445,108 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
   }
 
   Widget _buildEmployeeCard(EmployeeModel employee, int index) {
-    // OPTIMIZATION: Removed Animations for performance on low-end devices
     return Container(
-      margin: const EdgeInsets.only(bottom: DesignSystem.spacingM),
+      margin: const EdgeInsets.only(bottom: DesignSystem.spacingS),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(DesignSystem.radiusL),
-        // OPTIMIZATION: Shadows removed for performance
-        boxShadow: [],
+        color: DesignSystem.surfaceColor,
+        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+        border: Border.all(
+          color: DesignSystem.textTertiary.withValues(alpha: 0.1),
+        ),
       ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(DesignSystem.radiusL),
-        child: InkWell(
-          onTap: () => _showEditEmployeeDialog(employee),
-          borderRadius: BorderRadius.circular(DesignSystem.radiusL),
-          child: Padding(
-            padding: const EdgeInsets.all(DesignSystem.spacingM),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 24,
-                  backgroundColor: DesignSystem.primaryColor.withValues(
-                    alpha: 0.1,
-                  ),
-                  child: Text(
-                    employee.nombre[0].toUpperCase(),
-                    style: const TextStyle(
-                      color: DesignSystem.primaryColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: DesignSystem.primaryColor.withValues(alpha: 0.1),
+          child: Text(
+            employee.nombre.isNotEmpty ? employee.nombre[0].toUpperCase() : 'E',
+            style: const TextStyle(
+              color: DesignSystem.primaryColor,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        title: Text(
+          employee.nombre,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            color: DesignSystem.textPrimary,
+          ),
+        ),
+        subtitle: Text(
+          employee.telefono,
+          style: const TextStyle(color: DesignSystem.textSecondary),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              onPressed: () => _toggleEmployeeNotifications(employee),
+              icon: Icon(
+                employee.notificacionesActivas ?? false
+                    ? Icons.notifications
+                    : Icons.notifications_off,
+                color: employee.notificacionesActivas ?? false
+                    ? DesignSystem.primaryColor
+                    : DesignSystem.textTertiary,
+              ),
+            ),
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                switch (value) {
+                  case 'edit':
+                    _showEditEmployeeDialog(employee);
+                    break;
+                  case 'schedule':
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            ScheduleManagementScreen(employee: employee),
+                      ),
+                    );
+                    break;
+                  case 'delete':
+                    _deleteEmployee(employee);
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: Row(
                     children: [
-                      Text(
-                        employee.nombre,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.phone_android,
-                            size: 14,
-                            color: DesignSystem.textTertiary,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            employee.telefono,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: DesignSystem.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
+                      Icon(Icons.edit, color: DesignSystem.primaryColor),
+                      SizedBox(width: DesignSystem.spacingS),
+                      Text('Editar'),
                     ],
                   ),
                 ),
-                Column(
-                  children: [
-                    Switch(
-                      value: employee.notificacionesActivas ?? false,
-                      onChanged: (val) =>
-                          _toggleEmployeeNotifications(employee),
-                      activeThumbColor: DesignSystem.successColor,
-                    ),
-                    ThreeDotsMenuWidget(
-                      items: [
-                        ThreeDotsMenuItem(
-                          icon: Icons.edit_outlined,
-                          title: 'Editar',
-                          onTap: () => _showEditEmployeeDialog(employee),
-                        ),
-                        ThreeDotsMenuItem(
-                          icon: Icons.calendar_month_outlined,
-                          title: 'Horarios',
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ScheduleManagementScreen(
-                                  employee: employee,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        ThreeDotsMenuItem(
-                          icon: Icons.delete_outline,
-                          title: 'Eliminar',
-                          iconColor: DesignSystem.errorColor,
-                          textColor: DesignSystem.errorColor,
-                          onTap: () => _deleteEmployee(employee),
-                        ),
-                      ],
-                    ),
-                  ],
+                const PopupMenuItem(
+                  value: 'schedule',
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_month,
+                        color: DesignSystem.secondaryColor,
+                      ),
+                      SizedBox(width: DesignSystem.spacingS),
+                      Text('Gestionar Horario'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete, color: DesignSystem.errorColor),
+                      SizedBox(width: DesignSystem.spacingS),
+                      Text('Eliminar'),
+                    ],
+                  ),
                 ),
               ],
             ),
-          ),
+          ],
         ),
       ),
     );
