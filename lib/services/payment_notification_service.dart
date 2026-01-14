@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_notification_listener_plus/flutter_notification_listener_plus.dart';
 import 'package:another_telephony/telephony.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -55,8 +56,20 @@ class PaymentNotificationService {
       // Iniciar el servicio en background (Requisito de Android para escuchar en segundo plano)
       await NotificationsListener.startService(
         title: "Feelin Pay",
-        description: "Servicio de cobros activo",
+        description: "Escuchando notificaciones de pago",
+        subTitle: "Servicio activo",
+        showWhen: true,
+        foreground: true,
       );
+
+      // Start native persistent notification service
+      try {
+        const platform = MethodChannel('com.example.feelin_pay/notification');
+        await platform.invokeMethod('startPersistentNotification');
+        debugPrint('✅ Native persistent notification started');
+      } catch (e) {
+        debugPrint('⚠️ Failed to start native notification: $e');
+      }
 
       _isListening = true;
       debugPrint('✅ Servicio de Escucha Activo');

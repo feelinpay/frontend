@@ -21,12 +21,19 @@ class MembresiaService {
       // ApiService usualmente devuelve data.
 
       List<dynamic> list;
+
+      // Intentar extraer la lista de varias estructuras posibles
       if (dataMap.containsKey('membresias')) {
         list = dataMap['membresias'];
-      } else if (dataMap.containsKey('data') &&
-          dataMap['data'] is Map &&
-          dataMap['data'].containsKey('membresias')) {
-        list = dataMap['data']['membresias'];
+      } else if (dataMap.containsKey('data')) {
+        final innerData = dataMap['data'];
+        if (innerData is Map && innerData.containsKey('membresias')) {
+          list = innerData['membresias'];
+        } else if (innerData is List) {
+          list = innerData;
+        } else {
+          list = [];
+        }
       } else {
         list = [];
       }
@@ -137,13 +144,38 @@ class MembresiaService {
     return updateMembresia(id, activa: activa);
   }
 
-  /// Obtener estado de membresía de un usuario
+  // Caching simple para evitar múltiples llamadas simultáneas
+  static final Map<String, dynamic> _statusCache = {};
+
+  /// Invalidar caché (útil al cerrar sesión o recargar manualmente)
+  static void clearCache() {
+    _statusCache.clear();
+  }
+
+  /// Obtener estado de membresía de un usuario (Con Caché)
   Future<api_models.ApiResponse<Map<String, dynamic>>> getUserMembershipStatus(
-    String userId,
-  ) async {
+    String userId, {
+    bool forceRefresh = false,
+  }) async {
+    // Si no forzamos refresh y existe en caché, retornamos inmediatamente
+    if (!forceRefresh && _statusCache.containsKey(userId)) {
+      final cachedData = _statusCache[userId];
+      return api_models.ApiResponse<Map<String, dynamic>>(
+        success: true,
+        message: 'Loaded from cache',
+        data: cachedData,
+        statusCode: 200,
+      );
+    }
+
     final response = await _apiService.get<Map<String, dynamic>>(
-      '${AppConfig.superAdminEndpoint}/usuarios/$userId/membresias/status',
+      '${AppConfig.superAdminEndpoint}/membresias-usuarios/$userId/membresias/status',
     );
+
+    // Guardar en caché si fue exitoso
+    if (response.isSuccess && response.data != null) {
+      _statusCache[userId] = response.data;
+    }
 
     return api_models.ApiResponse<Map<String, dynamic>>(
       success: response.isSuccess,
@@ -159,9 +191,14 @@ class MembresiaService {
     required String membresiaId,
   }) async {
     final response = await _apiService.post<Map<String, dynamic>>(
-      '${AppConfig.superAdminEndpoint}/usuarios/membresias/assign',
+      '${AppConfig.superAdminEndpoint}/membresias-usuarios/membresias/assign',
       data: {'usuarioId': userId, 'membresiaId': membresiaId},
     );
+
+    // Invalidar caché para este usuario tras asignar
+    if (response.isSuccess) {
+      _statusCache.remove(userId);
+    }
 
     return api_models.ApiResponse<void>(
       success: response.isSuccess,

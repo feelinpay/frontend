@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
+import 'package:permission_handler/permission_handler.dart';
 import '../core/design/design_system.dart';
 import '../controllers/auth_controller.dart';
 import '../widgets/three_dots_menu_widget.dart';
@@ -31,8 +31,17 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
     _loadStatistics();
 
     // PERFORMANCE FIX: Start services AFTER the UI is rendered.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       _startBackgroundServices();
+
+      // Check permissions for returning users
+      if (await Permission.notification.isDenied ||
+          await Permission.sms.isDenied) {
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/permissions');
+          return;
+        }
+      }
     });
   }
 
@@ -52,10 +61,9 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
         debugPrint(
           "🎯 OwnerDashboard: Starting payment notification listener...",
         );
-        await PaymentNotificationService.startListening();
+        await PaymentNotificationService.startListening(showDialog: true);
 
         await SMSService.procesarSMSPendientes();
-        // BackgroundService is now auto-started in main.dart
       }
     } catch (e) {
       // Siltently fail or log if needed, but don't crash dashboard

@@ -65,10 +65,11 @@
             </intent-filter>
         </service>
 
-        <!-- Servicio de Background Service (flutter_background_service) -->
+        <!-- Persistent Notification Service (Custom) -->
         <service
-            android:name="id.flutter.flutter_background_service.BackgroundService"
-            android:foregroundServiceType="dataSync" />
+            android:name=".PersistentNotificationService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
         
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"

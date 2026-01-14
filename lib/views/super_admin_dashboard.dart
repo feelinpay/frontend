@@ -49,7 +49,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         debugPrint(
           "🎯 SuperAdminDashboard: Starting payment notification listener...",
         );
-        await PaymentNotificationService.startListening();
+        await PaymentNotificationService.startListening(showDialog: true);
       }
     } catch (e) {
       debugPrint("❌ Error starting background services: $e");

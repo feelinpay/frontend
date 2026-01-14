@@ -122,7 +122,7 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
     );
   }
 
-  void _navigateToDashboard() {
+  Future<void> _navigateToDashboard() async {
     if (_isNavigating) return;
     _isNavigating = true;
 
@@ -130,7 +130,7 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
       widget.onPermissionsGranted!();
     } else {
       if (mounted) {
-        // PERFORMANCE FIX: Just navigate. Services will start in the Dashboard.
+        // Navigate to dashboard - background services start automatically there
         Navigator.pushReplacementNamed(context, '/dashboard');
       }
     }
@@ -316,7 +316,7 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
       onTap: () async {
         if (p.permission != null) {
           await p.permission!.request();
-        } else if (p.title == 'Listener') {
+        } else if (p.permission == null && p.title.contains('Notificaciones')) {
           await PaymentNotificationService.openSettings();
         }
         _checkPermissions();

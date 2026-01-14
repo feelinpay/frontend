@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
+import '../services/payment_notification_service.dart';
 
 class AuthController with ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -150,6 +151,13 @@ class AuthController with ChangeNotifier {
 
   /// Cerrar sesión
   Future<void> logout() async {
+    // 1. Detener escucha de pagos (CRÍTICO: Evitar leak de servicio persistente)
+    try {
+      await PaymentNotificationService.stopListening();
+    } catch (e) {
+      debugPrint('Error deteniendo servicio en logout: $e');
+    }
+
     await _authService.logout();
     _currentUser = null;
     notifyListeners();

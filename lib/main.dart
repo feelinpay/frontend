@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'services/background_service.dart';
 import 'views/splash_screen.dart';
 import 'views/login_screen.dart';
 import 'views/system_permissions_screen.dart';
@@ -122,9 +121,6 @@ Future<void> _initServices() async {
 
     debugPrint("🔐 Initializing AuthController...");
     await _authController.initialize();
-
-    debugPrint("🔄 Initializing Background Service...");
-    await BackgroundService.initialize();
 
     debugPrint("🏁 Services Ready.");
   } catch (e) {

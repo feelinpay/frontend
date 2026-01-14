@@ -12,6 +12,7 @@ import '../widgets/assign_membership_dialog.dart';
 import '../widgets/membership_status_badge.dart';
 import 'owner_employees_screen.dart';
 import '../widgets/loading_overlay.dart';
+import '../services/membresia_service.dart';
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -36,6 +37,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
   }
 
   Future<void> _loadData() async {
+    MembresiaService.clearCache();
     setState(() => _isInitialLoading = true);
     try {
       _error = null;
@@ -286,14 +288,11 @@ class _UserManagementScreenState extends State<UserManagementScreen>
               style: TextStyle(color: Colors.grey[600], fontSize: 14),
             ),
             const SizedBox(height: 8),
-            Row(
-              children: [
-                _buildBadge('Rol', user.rol ?? 'Sin rol'),
-                const SizedBox(width: 8),
-                if (user.rol?.toLowerCase().trim() == 'propietario')
-                  MembershipStatusBadge(userId: user.id),
-              ],
-            ),
+            _buildBadge('Rol', user.rol ?? 'Sin rol'),
+            if (user.rol?.toLowerCase().trim() == 'propietario') ...[
+              const SizedBox(height: 4),
+              MembershipStatusBadge(userId: user.id),
+            ],
           ],
         ),
         trailing: ThreeDotsMenuWidget(

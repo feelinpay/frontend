@@ -179,16 +179,27 @@ class _AssignMembershipDialogState extends State<AssignMembershipDialog> {
                       ],
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: () {
+                        debugPrint('🔴 Closing dialog via X button');
+                        Navigator.of(context).pop();
+                      },
+                      child: const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Icon(Icons.close, color: Colors.white),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
 
             // Content
-            Expanded(
+            Flexible(
+              fit: FlexFit.loose,
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : _error != null
@@ -280,11 +291,11 @@ class _AssignMembershipDialogState extends State<AssignMembershipDialog> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(8.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
                   child: Column(
@@ -309,17 +320,22 @@ class _AssignMembershipDialogState extends State<AssignMembershipDialog> {
                     ],
                   ),
                 ),
-                ElevatedButton(
-                  onPressed: () => _assignMembership(plan),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: DesignSystem.primaryColor,
-                    foregroundColor: Colors.white,
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 100, // Explicit finite width to prevent layout errors
+                  child: ElevatedButton(
+                    onPressed: () => _assignMembership(plan),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: DesignSystem.primaryColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                    child: const Text('Asignar'),
                   ),
-                  child: const Text('Asignar'),
                 ),
               ],
             ),
-            const Divider(height: 16),
+            const Divider(),
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
@@ -334,12 +350,15 @@ class _AssignMembershipDialogState extends State<AssignMembershipDialog> {
                     color: Colors.green,
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    'Nueva expiración: ${_formatDate(newExpiration)}',
-                    style: const TextStyle(
-                      color: Colors.green,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
+                  Expanded(
+                    child: Text(
+                      'Nueva expiración: ${_formatDate(newExpiration)}',
+                      style: const TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],

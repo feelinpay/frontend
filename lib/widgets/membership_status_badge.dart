@@ -86,17 +86,21 @@ class _MembershipStatusBadgeState extends State<MembershipStatusBadge> {
         children: [
           Icon(_getStatusIcon(daysRemaining), size: 14, color: color),
           const SizedBox(width: 4),
-          Text(
-            '$daysRemaining días',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: color,
+          Flexible(
+            child: Text(
+              '$daysRemaining días',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
           if (daysRemaining < 7) ...[
-            const SizedBox(width: 4),
-            Icon(Icons.priority_high, size: 14, color: color),
+            const SizedBox(width: 2),
+            Icon(Icons.priority_high, size: 12, color: color),
           ],
         ],
       ),
