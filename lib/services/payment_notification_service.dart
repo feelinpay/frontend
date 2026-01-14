@@ -31,10 +31,18 @@ class PaymentNotificationService {
 
   /// Iniciar escucha de notificaciones de Yape
   static Future<void> startListening({bool showDialog = false}) async {
-    if (_isListening) return;
+    debugPrint('🚀 startListening() CALLED');
+    debugPrint('   _isListening: $_isListening');
+    debugPrint('   _currentUser: ${_currentUser?.id}');
+
+    if (_isListening) {
+      debugPrint('⚠️ Ya está escuchando, saliendo...');
+      return;
+    }
 
     try {
       // Verificar si tenemos acceso a notificaciones
+      debugPrint('🔍 Verificando permisos...');
       final bool hasPerm = await hasPermission;
       if (!hasPerm) {
         if (showDialog) {
@@ -56,10 +64,27 @@ class PaymentNotificationService {
 
       // Suscribirse al stream de eventos
       debugPrint('📡 Registrando listener de notificaciones...');
-      NotificationsListener.receivePort?.listen((evt) {
-        debugPrint('📨 EVENTO RECIBIDO DEL PUERTO');
-        _onNotificationReceived(evt);
-      });
+
+      // CRITICAL: Verify receivePort is not null
+      if (NotificationsListener.receivePort == null) {
+        debugPrint('❌ ERROR: receivePort is NULL! Cannot register listener.');
+        _isListening = false;
+        return;
+      }
+
+      debugPrint('✅ receivePort disponible, registrando callback...');
+      NotificationsListener.receivePort!.listen(
+        (evt) {
+          debugPrint('📨 EVENTO RECIBIDO DEL PUERTO');
+          _onNotificationReceived(evt);
+        },
+        onError: (error) {
+          debugPrint('❌ ERROR EN LISTENER: $error');
+        },
+        onDone: () {
+          debugPrint('⚠️ LISTENER CERRADO');
+        },
+      );
       debugPrint('✅ Listener registrado correctamente');
     } catch (e) {
       debugPrint('❌ Error iniciando Bridge Mode: $e');

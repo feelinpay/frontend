@@ -46,10 +46,14 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
       final user = authController.currentUser;
 
       if (user != null) {
-        // debugPrint("🚀 OwnerDashboard: Starting background services...");
+        debugPrint("🚀 OwnerDashboard: Starting background services...");
         await PaymentNotificationService.init(user);
 
-        // Reminder: Listener is manual (Bridge Mode)
+        // Iniciar listener de notificaciones automáticamente
+        debugPrint(
+          "🎯 OwnerDashboard: Starting payment notification listener...",
+        );
+        await PaymentNotificationService.startListening();
 
         await SMSService.procesarSMSPendientes();
         await BackgroundService.start();
