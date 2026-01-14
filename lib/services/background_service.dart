@@ -16,12 +16,8 @@ class BackgroundService {
     _isRunning = true;
     debugPrint('🔄 Iniciando servicio en segundo plano');
 
-    // Verificar conectividad cada 30 segundos
-    _connectivityTimer = Timer.periodic(const Duration(seconds: 30), (
-      timer,
-    ) async {
-      await _checkConnectivity();
-    });
+    // OPTIMIZATION: Removed periodic connectivity check to prevent ANR.
+    // We rely on reactive checks during user actions.
 
     // Mantener sesión activa cada 5 minutos
     _sessionTimer = Timer.periodic(const Duration(minutes: 5), (timer) async {
@@ -36,7 +32,6 @@ class BackgroundService {
   // Detener servicio en segundo plano
   static Future<void> stop() async {
     _isRunning = false;
-    _connectivityTimer?.cancel();
     _sessionTimer?.cancel();
     debugPrint('⏹️ Deteniendo servicio en segundo plano');
   }

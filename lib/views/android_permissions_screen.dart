@@ -1,13 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
-import '../controllers/auth_controller.dart';
 import '../controllers/system_controller.dart';
 import '../core/design/design_system.dart';
 import '../core/widgets/responsive_widgets.dart';
 import '../services/payment_notification_service.dart';
-import '../services/sms_service.dart';
-import '../services/background_service.dart';
 import '../widgets/app_header.dart';
 
 class AndroidPermissionsScreen extends StatefulWidget {
@@ -20,50 +18,23 @@ class AndroidPermissionsScreen extends StatefulWidget {
       _AndroidPermissionsScreenState();
 }
 
-class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen>
-    with TickerProviderStateMixin {
+class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
+  // OPTIMIZATION: Removed TickerProviderStateMixin and Animations
   Map<Permission, PermissionStatus> _permissions = {};
   bool _notificationListenerGranted = false;
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
+  bool _isChecking = true; // Empieza en true para evitar flicker inicial
+  bool _isNavigating = false; // Guard para evitar navegación doble
 
   @override
   void initState() {
     super.initState();
-    _initializeAnimations();
-    _checkAndNavigateIfGranted();
+    // Ejecutar después del primer frame para asegurar que el contexto sea válido
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndNavigateIfGranted();
+    });
   }
 
-  void _initializeAnimations() {
-    _animationController = AnimationController(
-      duration: DesignSystem.animationSlow,
-      vsync: this,
-    );
-
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: DesignSystem.curveEaseOut,
-      ),
-    );
-
-    _slideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _animationController,
-            curve: DesignSystem.curveEaseOut,
-          ),
-        );
-
-    _animationController.forward();
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
+  // OPTIMIZATION: Removed _initializeAnimations and dispose()
 
   Future<void> _checkPermissions() async {
     final Map<Permission, PermissionStatus> statuses = {};
@@ -79,6 +50,7 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen>
       setState(() {
         _permissions = statuses;
         _notificationListenerGranted = listenerGranted;
+        _isChecking = false;
       });
     }
   }
@@ -87,18 +59,47 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen>
     final smsGranted = _permissions[Permission.sms]?.isGranted ?? false;
     final notificationGranted =
         _permissions[Permission.notification]?.isGranted ?? false;
-    return smsGranted && notificationGranted && _notificationListenerGranted;
+    final batteryGranted =
+        _permissions[Permission.ignoreBatteryOptimizations]?.isGranted ?? false;
+
+    // Battery optimization is tricky: 'granted' means we are ignoring optimizations (good)
+    // Some devices return denied even if asked. We will be strict if possible, but allow bypass if it fails repeatedly?
+    // User requested "todos los permisos". So we enforce it.
+
+    return smsGranted &&
+        notificationGranted &&
+        _notificationListenerGranted &&
+        batteryGranted;
   }
 
   Future<void> _requestPermissions() async {
-    await Permission.sms.request();
-    await Permission.notification.request();
+    // 1. Solicitar permisos básicos primero
+    await [Permission.sms, Permission.notification].request();
 
+    // Actualizar estado intermedio
+    await _checkPermissions();
+
+    // 2. Verificar Listener (Requiere cambio de app)
     if (!_notificationListenerGranted) {
+      // Si no tiene permiso de listener, abrimos settings y DETENEMOS el flujo aquí.
+      // Cuando el usuario regrese, el onResume disparará _checkPermissions nuevamente.
+      // El usuario deberá presionar "Continuar" u otra vez el botón para seguir.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Por favor activa "Feelin Pay" en la lista'),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
       await PaymentNotificationService.openSettings();
+      return;
     }
 
+    // 3. Solicitar optimización de batería (Solo si ya pasamos lo anterior)
     await Permission.ignoreBatteryOptimizations.request();
+
+    // Verificación final
     await _checkPermissions();
 
     if (_allPermissionsGranted && mounted) {
@@ -122,28 +123,33 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen>
   }
 
   void _navigateToDashboard() {
-    // Iniciar servicios en segundo plano al entrar al dashboard
-    final authController = Provider.of<AuthController>(context, listen: false);
-    final user = authController.currentUser;
-
-    if (user != null) {
-      debugPrint("🚀 Iniciando servicios desde pantalla de permisos...");
-      PaymentNotificationService.init(user).then((_) {
-        PaymentNotificationService.startListening(showDialog: false);
-      });
-      SMSService.procesarSMSPendientes();
-      BackgroundService.start();
-    }
+    if (_isNavigating) return;
+    _isNavigating = true;
 
     if (widget.onPermissionsGranted != null) {
       widget.onPermissionsGranted!();
     } else {
-      Navigator.pushReplacementNamed(context, '/dashboard');
+      if (mounted) {
+        // PERFORMANCE FIX: Just navigate. Services will start in the Dashboard.
+        Navigator.pushReplacementNamed(context, '/dashboard');
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isChecking) {
+      return Scaffold(
+        backgroundColor: DesignSystem.backgroundColor,
+        body: Center(
+          child: CircularProgressIndicator(
+            color: DesignSystem.primaryColor,
+            strokeWidth: 3,
+          ),
+        ),
+      );
+    }
+
     final systemController = Provider.of<SystemController>(context);
 
     return Scaffold(
@@ -156,26 +162,20 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen>
             showUserInfo: true,
           ),
           Expanded(
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: SlideTransition(
-                position: _slideAnimation,
-                child: ResponsiveContainer(
-                  maxWidth: 600, // Un poco más ancho que el login para el grid
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: DesignSystem.spacingM,
-                  ),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: DesignSystem.spacingM),
-                        _buildModernHeader(context, systemController),
-                        const SizedBox(height: DesignSystem.spacingM),
-                        _buildPermissionsGrid(context),
-                      ],
-                    ),
-                  ),
+            child: ResponsiveContainer(
+              maxWidth: 600, // Un poco más ancho que el login para el grid
+              padding: const EdgeInsets.symmetric(
+                horizontal: DesignSystem.spacingM,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: DesignSystem.spacingM),
+                    _buildModernHeader(context, systemController),
+                    const SizedBox(height: DesignSystem.spacingM),
+                    _buildPermissionsGrid(context),
+                  ],
                 ),
               ),
             ),
@@ -272,7 +272,7 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen>
     final permissions = [
       _PermissionData(
         icon: Icons.sms_outlined,
-        title: 'Enviar SMS (Alertas)',
+        title: 'Enviar SMS',
         permission: Permission.sms,
         isRequired: true,
       ),
@@ -284,9 +284,15 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen>
       ),
       _PermissionData(
         icon: Icons.flash_on_outlined,
-        title: 'Listener',
+        title: 'Acceso a Notificaciones',
         permission: null,
         isGrantedOverride: _notificationListenerGranted,
+        isRequired: true,
+      ),
+      _PermissionData(
+        icon: Icons.battery_alert,
+        title: 'Segundo Plano',
+        permission: Permission.ignoreBatteryOptimizations,
         isRequired: true,
       ),
     ];

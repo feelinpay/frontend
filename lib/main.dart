@@ -41,6 +41,57 @@ void main() async {
         // Configurar UI básico
         DesignSystem.configureStatusBar();
 
+        // BLINDAJE: Reemplazar Pantalla Roja de la Muerte con UI Amigable
+        ErrorWidget.builder = (FlutterErrorDetails details) {
+          bool isDebug = false;
+          assert(() {
+            isDebug = true;
+            return true;
+          }());
+
+          // En desarrollo queremos ver el error real
+          if (isDebug) return ErrorWidget(details.exception);
+
+          // En producción mostramos pantalla de recuperación
+          return Material(
+            color: Colors.white,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    color: Colors.orange,
+                    size: 60,
+                  ), // Removed external asset dependency for safety
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Algo salió mal inesperadamente',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'No te preocupes, la app sigue viva.',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                  const SizedBox(height: 30),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      runApp(const MyApp()); // Hard Reset de la UI
+                    },
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Recargar Aplicación'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6D28D9), // Primary Color
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        };
+
         // Lanzar la app después de inicializaciones críticas
         runApp(const MyApp());
 
@@ -104,7 +155,11 @@ class MyApp extends StatelessWidget {
             final user = authController.currentUser;
 
             // Navegación directa basada en roles
-            if (user?.rol == 'super_admin') {
+            if (user == null) {
+              return const LoginScreen();
+            }
+
+            if (user.rol == 'super_admin') {
               return const SuperAdminDashboard();
             }
 

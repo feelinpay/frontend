@@ -15,11 +15,8 @@ class SuperAdminDashboard extends StatefulWidget {
   State<SuperAdminDashboard> createState() => _SuperAdminDashboardState();
 }
 
-class _SuperAdminDashboardState extends State<SuperAdminDashboard>
-    with TickerProviderStateMixin {
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
+class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
+  // OPTIMIZATION: Removed AnimationController and Mixin for performance
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   final UserManagementService _userService = UserManagementService();
@@ -31,36 +28,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard>
   @override
   void initState() {
     super.initState();
-    _initializeAnimations();
     _loadStatistics();
   }
 
-  void _initializeAnimations() {
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 1000),
-      vsync: this,
-    );
-
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
-    );
-
-    _slideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _animationController,
-            curve: Curves.easeOutCubic,
-          ),
-        );
-
-    _animationController.forward();
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
+  // OPTIMIZATION: Removed _initializeAnimations and dispose() as they're no longer needed
 
   Future<void> _loadStatistics() async {
     setState(() {
@@ -87,13 +58,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard>
         _error = 'Error al cargar estadísticas: $e';
         _isLoading = false;
       });
-      // Error silenced
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authController = context.read<AuthController>();
+    final authController = context.watch<AuthController>();
     final currentUser = authController.currentUser;
 
     return Scaffold(
@@ -155,26 +125,20 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard>
                       ],
                     ),
                   )
-                : FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: SlideTransition(
-                      position: _slideAnimation,
-                      child: ResponsiveContainer(
-                        maxWidth: 1000,
-                        padding: const EdgeInsets.all(DesignSystem.spacingM),
-                        child: SingleChildScrollView(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Estadísticas principales
-                              _buildStatsSection(),
-                              const SizedBox(height: DesignSystem.spacingXL),
+                : ResponsiveContainer(
+                    maxWidth: 1000,
+                    padding: const EdgeInsets.all(DesignSystem.spacingM),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Estadísticas principales
+                          _buildStatsSection(),
+                          const SizedBox(height: DesignSystem.spacingXL),
 
-                              // Atajos de Gestión
-                              _buildManagementShortcuts(context),
-                            ],
-                          ),
-                        ),
+                          // Atajos de Gestión
+                          _buildManagementShortcuts(context),
+                        ],
                       ),
                     ),
                   ),

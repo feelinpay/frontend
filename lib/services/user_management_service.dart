@@ -351,10 +351,14 @@ class UserManagementService {
     );
 
     if (response.isSuccess && response.data != null) {
+      final data = response.data!;
+      // FIX: Backend returns { empleado: {...}, usuario: {...} }
+      final empleadoData = data['empleado'] as Map<String, dynamic>? ?? data;
+
       return api_models.ApiResponse<EmployeeModel>(
         success: true,
         message: response.message,
-        data: EmployeeModel.fromJson(response.data!),
+        data: EmployeeModel.fromJson(empleadoData),
         statusCode: response.statusCode,
       );
     }
@@ -379,10 +383,14 @@ class UserManagementService {
     );
 
     if (response.isSuccess && response.data != null) {
+      final data = response.data!;
+      // FIX: Backend returns { empleado: {...}, usuario: {...} }
+      final empleadoData = data['empleado'] as Map<String, dynamic>? ?? data;
+
       return api_models.ApiResponse<EmployeeModel>(
         success: true,
         message: response.message,
-        data: EmployeeModel.fromJson(response.data!),
+        data: EmployeeModel.fromJson(empleadoData),
         statusCode: response.statusCode,
       );
     }

@@ -43,6 +43,7 @@ class _EditEmployeeDialogState extends State<EditEmployeeDialog> {
   );
 
   bool _isLoading = false;
+  String? _errorMessage; // NEW: Local error state for better visibility
   late bool _activo;
 
   // Lista 'quick' para fallback
@@ -86,21 +87,13 @@ class _EditEmployeeDialogState extends State<EditEmployeeDialog> {
   void _showCountryPicker() {
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        child: SizedBox(
-          height: 500,
-          child: CountryPicker(
-            onCountrySelected: (country) {
-              setState(() {
-                _selectedCountry = country;
-              });
-              Navigator.pop(context);
-            },
-          ),
-        ),
+      builder: (context) => CountryPicker(
+        onCountrySelected: (country) {
+          setState(() {
+            _selectedCountry = country;
+          });
+          Navigator.pop(context);
+        },
       ),
     );
   }
@@ -111,8 +104,11 @@ class _EditEmployeeDialogState extends State<EditEmployeeDialog> {
     setState(() => _isLoading = true);
 
     try {
-      // Clean phone number (remove spaces)
-      final cleanPhone = _phoneFormatter.getUnmaskedText();
+      // FIX: Use controller text directly to ensure we get the value even if user didn't type (initState)
+      final cleanPhone = _phoneController.text.replaceAll(
+        RegExp(r'[^0-9]'),
+        '',
+      );
 
       final response = await _userService.updateEmployeeForOwner(
         widget.ownerId,
@@ -132,10 +128,9 @@ class _EditEmployeeDialogState extends State<EditEmployeeDialog> {
           'Empleado actualizado exitosamente',
         );
       } else {
-        SnackBarHelper.showError(
-          context,
-          ErrorHelper.processApiError(response),
-        );
+        setState(() {
+          _errorMessage = ErrorHelper.processApiError(response);
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -161,12 +156,41 @@ class _EditEmployeeDialogState extends State<EditEmployeeDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (_errorMessage != null)
+                Container(
+                  margin: const EdgeInsets.only(bottom: DesignSystem.spacingM),
+                  padding: const EdgeInsets.all(DesignSystem.spacingS),
+                  decoration: BoxDecoration(
+                    color: DesignSystem.errorColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                    border: Border.all(color: DesignSystem.errorColor),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        color: DesignSystem.errorColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(
+                            color: DesignSystem.errorColor,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               TextFormField(
                 controller: _nameController,
+                textCapitalization: TextCapitalization.words,
                 decoration: InputDecoration(
                   labelText: 'Nombre',
-                  hintText: 'Nombre completo',
-                  helperText: ' ',
+                  hintText: 'Nombre del empleado',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(DesignSystem.radiusM),
                     borderSide: BorderSide.none,
@@ -189,10 +213,11 @@ class _EditEmployeeDialogState extends State<EditEmployeeDialog> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Country Picker - Using defined width with FittedBox for safety
                   GestureDetector(
                     onTap: _showCountryPicker,
                     child: Container(
-                      width: 100,
+                      width: 80, // Safer width for small screens
                       padding: const EdgeInsets.symmetric(
                         vertical: 16,
                         horizontal: DesignSystem.spacingS,
@@ -207,23 +232,26 @@ class _EditEmployeeDialogState extends State<EditEmployeeDialog> {
                           DesignSystem.radiusM,
                         ),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            _selectedCountry.flag,
-                            style: const TextStyle(fontSize: 20),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _selectedCountry.dialCode,
-                            style: const TextStyle(
-                              color: DesignSystem.textPrimary,
-                              fontWeight: FontWeight.w500,
-                              fontSize: 13,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              _selectedCountry.flag,
+                              style: const TextStyle(fontSize: 20),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 4),
+                            Text(
+                              _selectedCountry.dialCode,
+                              style: const TextStyle(
+                                color: DesignSystem.textPrimary,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -253,6 +281,14 @@ class _EditEmployeeDialogState extends State<EditEmployeeDialog> {
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return 'Requerido';
+                        }
+                        // FIX: Check controller text directly
+                        final unmasked = _phoneController.text.replaceAll(
+                          RegExp(r'[^0-9]'),
+                          '',
+                        );
+                        if (unmasked.length < 9) {
+                          return 'Mínimo 9 dígitos';
                         }
                         return null;
                       },

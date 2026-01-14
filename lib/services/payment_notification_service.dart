@@ -52,11 +52,15 @@ class PaymentNotificationService {
 
       _isListening = true;
       debugPrint('✅ Servicio de Escucha Activo');
+      debugPrint('   Usuario: ${_currentUser?.nombre} (${_currentUser?.id})');
 
       // Suscribirse al stream de eventos
-      NotificationsListener.receivePort?.listen(
-        (evt) => _onNotificationReceived(evt),
-      );
+      debugPrint('📡 Registrando listener de notificaciones...');
+      NotificationsListener.receivePort?.listen((evt) {
+        debugPrint('📨 EVENTO RECIBIDO DEL PUERTO');
+        _onNotificationReceived(evt);
+      });
+      debugPrint('✅ Listener registrado correctamente');
     } catch (e) {
       debugPrint('❌ Error iniciando Bridge Mode: $e');
       _isListening = false;
@@ -94,33 +98,54 @@ class PaymentNotificationService {
 
   /// Callback cuando llega una notificación
   static Future<void> _onNotificationReceived(NotificationEvent? evt) async {
-    if (evt == null || _currentUser == null) return;
+    debugPrint('🔥 NOTIFICATION CALLBACK TRIGGERED!');
+    debugPrint('   Package: ${evt?.packageName}');
+    debugPrint('   Current User: ${_currentUser?.id}');
 
-    // Filtro por paquete (Yape)
-    // com.bcp.innovacxion.yapeapp (Yape)
+    if (evt == null || _currentUser == null) {
+      debugPrint(
+        '❌ CALLBACK ABORTED: evt=${evt != null}, user=${_currentUser != null}',
+      );
+      return;
+    }
+
+    // 🛑 PRIVACY FILTER: Strictly limit processing to Yape package
+    // OPTIMIZED: Strict filtering.
     final packageName = evt.packageName;
-    if (packageName != 'com.bcp.innovacxion.yapeapp' &&
-        packageName?.contains('yape') != true) {
+    if (packageName != 'com.bcp.innovacxion.yapeapp') {
+      debugPrint('⏭️ SKIPPED: Not Yape package ($packageName)');
       return;
     }
 
     final title = evt.title ?? '';
-    final body =
-        evt.text ?? ''; // El contenido del mensaje ("Te enviaron S/...")
+    final body = evt.text ?? '';
+    final uniqueId = evt.uniqueId ?? evt.createAt.toString();
 
-    debugPrint('🔔 Notificación Yape Detectada: $title - $body');
+    // DEBUG: Log Yape notifications for troubleshooting
+    debugPrint('🔔 YAPE NOTIFICATION RECEIVED:');
+    debugPrint('   Title: $title');
+    debugPrint('   Body: $body');
 
-    // Parsear datos (Regex simple para extraer monto y nombre)
-    // Formato típico Yape: "Juan Perez te envió S/ 20.00"
-    final parseResult = _parsePaymentNotification(
-      title,
-      body,
-      evt.uniqueId ?? evt.createAt.toString(),
+    // Parsear en ISOLATE para no bloquear UI
+    final parseResult = await compute(
+      _parseNotificationInIsolate,
+      _ParseData(title, body, uniqueId),
     );
 
     if (parseResult != null) {
+      debugPrint('✅ PAYMENT PARSED:');
+      debugPrint('   Pagador: ${parseResult['nombrePagador']}');
+      debugPrint('   Monto: S/ ${parseResult['monto']}');
+      debugPrint('   Código: ${parseResult['codigoSeguridad']}');
       await _processPaymentBridge(parseResult);
+    } else {
+      debugPrint('❌ PAYMENT PARSING FAILED - notification ignored');
     }
+  }
+
+  // Helper class for compute
+  static Map<String, dynamic>? _parseNotificationInIsolate(_ParseData data) {
+    return _parsePaymentNotification(data.title, data.body, data.uniqueId);
   }
 
   // Cache para evitar duplicados (Android a veces envía el evento múltiple veces)
@@ -156,20 +181,33 @@ class PaymentNotificationService {
             ? body.substring(0, nombreEndIndex).trim()
             : 'Desconocido';
 
-        // Determinar Código Final
+        // Determinar Código Final y Medio de Pago
         String codigo = '';
+        String medioDePago = '';
+
         if (matchCode != null) {
+          // YAPE → YAPE (tiene código de seguridad explícito)
           codigo = matchCode.group(1)!;
+          medioDePago = 'Yape';
         } else {
-          // Fallback: buscar 3-6 dígitos al final si no machea el texto exacto
+          // PLIN → YAPE o auto-transferencia (no tiene código explícito)
+          // Fallback mejorado: buscar cualquier secuencia de 3-6 dígitos
           final RegExp regexFallback = RegExp(r'\b\d{3,6}\b');
-          final matchFallback = regexFallback.allMatches(body).lastOrNull;
-          if (matchFallback != null) {
-            codigo = matchFallback.group(0)!;
+          final allMatches = regexFallback.allMatches(body).toList();
+
+          if (allMatches.isNotEmpty) {
+            // Tomar el último match (usualmente el código está al final)
+            codigo = allMatches.last.group(0)!;
+            medioDePago =
+                'Plin'; // Asumimos Plin si hay dígitos pero no formato Yape
           } else {
-            // Generado solo si falla todo (muy raro en confirmación válida)
+            // Si no hay código, generar uno basado en timestamp + nombre
+            final timestamp = DateTime.now().millisecondsSinceEpoch;
+            final nameHash = nombre.hashCode.abs();
             codigo =
-                'REF-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
+                'PLIN-${(timestamp % 100000).toString().padLeft(5, '0')}-${(nameHash % 1000).toString().padLeft(3, '0')}';
+            medioDePago = 'Plin';
+            debugPrint('⚠️ Pago Plin→Yape detectado, código generado: $codigo');
           }
         }
 
@@ -191,6 +229,7 @@ class PaymentNotificationService {
           'nombrePagador': nombre,
           'monto': double.tryParse(montoStr ?? '0') ?? 0.0,
           'codigoSeguridad': codigo,
+          'medioDePago': medioDePago, // 'Yape' o 'Plin'
           'originalText': '$title $body',
         };
       }
@@ -206,21 +245,35 @@ class PaymentNotificationService {
     if (_currentUser == null) return;
 
     try {
+      debugPrint('📤 SENDING TO BACKEND:');
+      debugPrint('   Endpoint: /payments/yape');
+      debugPrint('   Usuario ID: ${_currentUser!.id}');
+      debugPrint('   Pagador: ${paymentData['nombrePagador']}');
+      debugPrint('   Monto: ${paymentData['monto']}');
+      debugPrint('   Código: ${paymentData['codigoSeguridad']}');
+
       // 1. Enviar al Backend (Log en Sheets + Notificación Dashboard)
       // Enviamos el pago INMEDIATAMENTE para que el backend decida destinatarios
       final response = await _apiService.post<Map<String, dynamic>>(
-        '/payments/yape-webhook', // Endpoint existente o nuevo para webhook interno
+        '/payments/yape', // Endpoint correcto según paymentRoutes.ts
         data: {
           'usuarioId': _currentUser!.id,
           'nombrePagador': paymentData['nombrePagador'],
           'monto': paymentData['monto'],
           'codigoSeguridad': paymentData['codigoSeguridad'],
+          'medioDePago': paymentData['medioDePago'], // 'Yape' o 'Plin'
         },
       );
+
+      debugPrint('📥 BACKEND RESPONSE:');
+      debugPrint('   Success: ${response.isSuccess}');
+      debugPrint('   Message: ${response.message}');
 
       // 2. Revisar si hay que enviar SMS (Respuesta del backend)
       if (response.isSuccess && response.data != null) {
         final data = response.data!;
+        debugPrint('   SMS Targets: ${data['smsTargets']}');
+
         if (data['smsTargets'] != null) {
           final List<dynamic> targets = data['smsTargets'];
 
@@ -234,6 +287,8 @@ class PaymentNotificationService {
             await _sendSMSBatch(targets.cast<String>(), message);
           }
         }
+      } else {
+        debugPrint('❌ BACKEND ERROR: ${response.message}');
       }
     } catch (e) {
       debugPrint('❌ Error procesando pago en backend: $e');
@@ -251,4 +306,12 @@ class PaymentNotificationService {
       }
     }
   }
+}
+
+class _ParseData {
+  final String title;
+  final String body;
+  final String uniqueId;
+
+  _ParseData(this.title, this.body, this.uniqueId);
 }

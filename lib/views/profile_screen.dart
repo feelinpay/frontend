@@ -14,35 +14,17 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen>
-    with TickerProviderStateMixin {
-  AnimationController? _animationController;
-  Animation<double>? _fadeAnimation;
+class _ProfileScreenState extends State<ProfileScreen> {
+  // OPTIMIZATION: Removed AnimationController and TickerProviderStateMixin
 
   @override
   void initState() {
     super.initState();
-    _initializeAnimations();
   }
 
-  void _initializeAnimations() {
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
-    );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController!, curve: Curves.easeOut),
-    );
-    _animationController!.forward();
-  }
+  // OPTIMIZATION: Removed _initializeAnimations and dispose()
 
   bool _isBridgeModeActive = false;
-
-  @override
-  void dispose() {
-    _animationController?.dispose();
-    super.dispose();
-  }
 
   Widget _buildBridgeModeSection() {
     return Container(
@@ -162,24 +144,21 @@ class _ProfileScreenState extends State<ProfileScreen>
         children: [
           const AppHeader(title: 'Mi Perfil', showUserInfo: true),
           Expanded(
-            child: FadeTransition(
-              opacity: _fadeAnimation!,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(DesignSystem.spacingM),
-                child: Column(
-                  children: [
-                    _buildProfileInfo(user),
-                    const SizedBox(height: DesignSystem.spacingL),
-                    _buildQuickActions(isSuperAdmin),
-                    const SizedBox(height: DesignSystem.spacingL),
-                    if (!isSuperAdmin) _buildBridgeModeSection(),
-                    const SizedBox(height: DesignSystem.spacingL),
-                    if (isSuperAdmin) _buildAdminSettings(),
-                    const SizedBox(height: DesignSystem.spacingL),
-                    _buildLogoutSection(context),
-                    const SizedBox(height: DesignSystem.spacingXL),
-                  ],
-                ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(DesignSystem.spacingM),
+              child: Column(
+                children: [
+                  _buildProfileInfo(user),
+                  const SizedBox(height: DesignSystem.spacingL),
+                  _buildQuickActions(isSuperAdmin),
+                  const SizedBox(height: DesignSystem.spacingL),
+                  if (!isSuperAdmin) _buildBridgeModeSection(),
+                  const SizedBox(height: DesignSystem.spacingL),
+                  if (isSuperAdmin) _buildAdminSettings(),
+                  const SizedBox(height: DesignSystem.spacingL),
+                  _buildLogoutSection(context),
+                  const SizedBox(height: DesignSystem.spacingXL),
+                ],
               ),
             ),
           ),

@@ -11,10 +11,6 @@ class AddEmployeeDialog extends StatefulWidget {
   final String ownerId; // Optional: If adding for a specific owner
   final Function(EmployeeModel) onEmployeeAdded;
 
-  // Si ownerId es null o vacío, se asume que se está creando para el usuario actual (o lógica similar)
-  // Pero según el servicio `createEmployeeForOwner` require ownerId.
-  // En `employee_management_screen`, el usuario actual ES el owner, así que pasamos su ID.
-
   const AddEmployeeDialog({
     super.key,
     required this.ownerId,
@@ -45,6 +41,7 @@ class _AddEmployeeDialogState extends State<AddEmployeeDialog> {
   );
 
   bool _isLoading = false;
+  String? _errorMessage; // NEW: Local error state
 
   @override
   void dispose() {
@@ -56,21 +53,13 @@ class _AddEmployeeDialogState extends State<AddEmployeeDialog> {
   void _showCountryPicker() {
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        child: SizedBox(
-          height: 500,
-          child: CountryPicker(
-            onCountrySelected: (country) {
-              setState(() {
-                _selectedCountry = country;
-              });
-              Navigator.pop(context);
-            },
-          ),
-        ),
+      builder: (context) => CountryPicker(
+        onCountrySelected: (country) {
+          setState(() {
+            _selectedCountry = country;
+          });
+          Navigator.pop(context);
+        },
       ),
     );
   }
@@ -78,15 +67,17 @@ class _AddEmployeeDialogState extends State<AddEmployeeDialog> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (widget.ownerId.isEmpty) {
-      // Should not happen ideally
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      // Clean phone number (remove spaces)
-      final cleanPhone = _phoneFormatter.getUnmaskedText();
+      // FIX: Use controller text directly
+      final cleanPhone = _phoneController.text.replaceAll(
+        RegExp(r'[^0-9]'),
+        '',
+      );
 
       final response = await _userService.createEmployeeForOwner(
         widget.ownerId,
@@ -101,10 +92,9 @@ class _AddEmployeeDialogState extends State<AddEmployeeDialog> {
         Navigator.pop(context);
         SnackBarHelper.showSuccess(context, 'Empleado agregado exitosamente');
       } else {
-        SnackBarHelper.showError(
-          context,
-          ErrorHelper.processApiError(response),
-        );
+        setState(() {
+          _errorMessage = ErrorHelper.processApiError(response);
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -130,11 +120,41 @@ class _AddEmployeeDialogState extends State<AddEmployeeDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (_errorMessage != null)
+                Container(
+                  margin: const EdgeInsets.only(bottom: DesignSystem.spacingM),
+                  padding: const EdgeInsets.all(DesignSystem.spacingS),
+                  decoration: BoxDecoration(
+                    color: DesignSystem.errorColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+                    border: Border.all(color: DesignSystem.errorColor),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        color: DesignSystem.errorColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(
+                            color: DesignSystem.errorColor,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               TextFormField(
                 controller: _nameController,
+                textCapitalization: TextCapitalization.words,
                 decoration: InputDecoration(
                   labelText: 'Nombre',
-                  hintText: 'Nombre completo',
+                  hintText: 'Nombre del empleado',
                   helperText: ' ', // Reserve space for error
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(DesignSystem.radiusM),
@@ -158,13 +178,13 @@ class _AddEmployeeDialogState extends State<AddEmployeeDialog> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Country Picker - Using defined width instead of flex often helps avoid overflow or squeeze
+                  // Country Picker - Using defined width with FittedBox for safety
                   GestureDetector(
                     onTap: _showCountryPicker,
                     child: Container(
-                      width: 100, // Fixed width for country code
+                      width: 80, // Safer width for small screens
                       padding: const EdgeInsets.symmetric(
-                        vertical: 16, // Match default input height approx
+                        vertical: 16,
                         horizontal: DesignSystem.spacingS,
                       ),
                       decoration: BoxDecoration(
@@ -177,23 +197,26 @@ class _AddEmployeeDialogState extends State<AddEmployeeDialog> {
                           DesignSystem.radiusM,
                         ),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            _selectedCountry.flag,
-                            style: const TextStyle(fontSize: 20),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _selectedCountry.dialCode,
-                            style: const TextStyle(
-                              color: DesignSystem.textPrimary,
-                              fontWeight: FontWeight.w500,
-                              fontSize: 13,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              _selectedCountry.flag,
+                              style: const TextStyle(fontSize: 20),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 4),
+                            Text(
+                              _selectedCountry.dialCode,
+                              style: const TextStyle(
+                                color: DesignSystem.textPrimary,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -224,6 +247,14 @@ class _AddEmployeeDialogState extends State<AddEmployeeDialog> {
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return 'Requerido';
+                        }
+                        // FIX: Check controller text directly
+                        final unmasked = _phoneController.text.replaceAll(
+                          RegExp(r'[^0-9]'),
+                          '',
+                        );
+                        if (unmasked.length < 9) {
+                          return 'Mínimo 9 dígitos';
                         }
                         return null;
                       },

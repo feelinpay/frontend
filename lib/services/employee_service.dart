@@ -367,19 +367,14 @@ class EmployeeService {
   Future<api_models.ApiResponse<List<Map<String, dynamic>>>> getWorkSchedules(
     String employeeId,
   ) async {
-    final response = await _apiService.get<Map<String, dynamic>>(
+    // FIX: Backend returns { success: true, data: [...] }
+    // ApiService unwraps 'data', so we get a List, not a Map.
+    final response = await _apiService.get<List<dynamic>>(
       '${AppConfig.ownerEndpoint}/employees/$employeeId/horarios-laborales',
     );
 
     if (response.isSuccess && response.data != null) {
-      final data = response.data!;
-      List<dynamic> schedulesList = [];
-
-      if (data['horarios'] != null) {
-        schedulesList = data['horarios'] as List<dynamic>;
-      } else if (data['data'] != null) {
-        schedulesList = data['data'] as List<dynamic>;
-      }
+      final schedulesList = response.data!; // This is already the list
 
       return api_models.ApiResponse<List<Map<String, dynamic>>>(
         success: true,

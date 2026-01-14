@@ -70,10 +70,14 @@ class AdminDrawer extends StatelessWidget {
             accountEmail: Text(user?.email ?? ''),
             currentAccountPicture: CircleAvatar(
               backgroundColor: Colors.white,
-              backgroundImage: user?.imagen != null
-                  ? NetworkImage(user!.imagen!)
+              foregroundImage: user?.imagen != null && user!.imagen!.isNotEmpty
+                  ? ResizeImage(
+                      NetworkImage(user!.imagen!),
+                      width: 150,
+                      policy: ResizeImagePolicy.fit,
+                    )
                   : null,
-              child: user?.imagen == null
+              child: (user?.nombre != null && user!.nombre.isNotEmpty)
                   ? Text(
                       user!.nombre.substring(0, 1).toUpperCase(),
                       style: const TextStyle(
@@ -82,7 +86,7 @@ class AdminDrawer extends StatelessWidget {
                         fontSize: 24,
                       ),
                     )
-                  : null,
+                  : const Icon(Icons.person, color: DesignSystem.primaryColor),
             ),
           ),
 

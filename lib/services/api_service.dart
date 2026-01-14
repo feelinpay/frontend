@@ -25,9 +25,9 @@ class ApiService {
     _dio = Dio(
       BaseOptions(
         baseUrl: AppConfig.apiBaseUrl,
-        connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(seconds: 30),
-        sendTimeout: const Duration(seconds: 30),
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+        sendTimeout: const Duration(seconds: 10),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -76,7 +76,8 @@ class ApiService {
               '✅ API Response: ${response.statusCode} ${response.requestOptions.path}',
             );
             if (response.data != null) {
-              debugPrint('📥 Response Data: ${response.data}');
+              // OPTIMIZATION: Do not print full data body to avoid main thread freeze
+              debugPrint('📥 Response Type: ${response.data.runtimeType}');
             }
           }
 
@@ -89,9 +90,13 @@ class ApiService {
           // Log de errores en desarrollo
           if (AppConfig.isDevelopment) {
             debugPrint(
-              '❌ API Error: ${error.response?.statusCode} ${error.requestOptions.path}',
+              '❌ API Error: ${error.response?.statusCode ?? error.type} ${error.requestOptions.path}',
             );
-            debugPrint('🔍 Error Data: ${error.response?.data}');
+            if (error.response?.data != null) {
+              debugPrint('🔍 Error Data: ${error.response?.data}');
+            } else {
+              debugPrint('🔍 Error Message: ${error.message}');
+            }
           }
 
           // Manejar token expirado (401)

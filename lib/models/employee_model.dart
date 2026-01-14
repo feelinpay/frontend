@@ -34,7 +34,7 @@ class EmployeeModel {
       updatedAt: DateTime.parse(
         json['updatedAt'] ?? DateTime.now().toIso8601String(),
       ),
-      notificacionesActivas: json['configuracionNotificacion']?['notificacionesActivas'],
+      notificacionesActivas: json['activo'] ?? false,
     );
   }
 
@@ -48,7 +48,9 @@ class EmployeeModel {
       'activo': activo,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
-      'configuracionNotificacion': notificacionesActivas != null ? {'notificacionesActivas': notificacionesActivas} : null,
+      'configuracionNotificacion': notificacionesActivas != null
+          ? {'notificacionesActivas': notificacionesActivas}
+          : null,
     };
   }
 
@@ -71,7 +73,8 @@ class EmployeeModel {
       activo: activo ?? this.activo,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
-      notificacionesActivas: notificacionesActivas ?? this.notificacionesActivas,
+      notificacionesActivas:
+          notificacionesActivas ?? this.notificacionesActivas,
     );
   }
 
@@ -87,11 +90,14 @@ class EmployeeModel {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is EmployeeModel && runtimeType == other.runtimeType && id == other.id;
+      other is EmployeeModel &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
 
   @override
   int get hashCode => id.hashCode;
 
   @override
-  String toString() => 'EmployeeModel(id: $id, nombre: $nombre, telefono: $telefono)';
+  String toString() =>
+      'EmployeeModel(id: $id, nombre: $nombre, telefono: $telefono)';
 }

@@ -1,19 +1,17 @@
 import 'package:flutter/material.dart';
-
-import '../core/design/design_system.dart';
-import '../widgets/three_dots_menu_widget.dart';
-import '../widgets/app_header.dart'; // NEW: AppHeader
-import '../widgets/snackbar_helper.dart';
-import '../widgets/loading_overlay.dart';
+import '../widgets/app_header.dart';
 import '../widgets/admin_drawer.dart';
-import '../controllers/auth_controller.dart';
+import '../widgets/three_dots_menu_widget.dart';
 import '../services/employee_service.dart';
 import '../models/employee_model.dart';
-import '../utils/error_helper.dart';
+import '../controllers/auth_controller.dart';
 import 'package:provider/provider.dart';
-import '../widgets/add_employee_dialog.dart'; // NEW
-import '../widgets/edit_employee_dialog.dart'; // NEW
-import '../views/schedule_management_screen.dart'; // NEW
+import '../widgets/add_employee_dialog.dart';
+import '../widgets/edit_employee_dialog.dart';
+import 'schedule_management_screen.dart';
+import '../core/design/design_system.dart';
+import '../widgets/loading_overlay.dart';
+import '../widgets/snackbar_helper.dart';
 
 class EmployeeManagementScreen extends StatefulWidget {
   const EmployeeManagementScreen({super.key});
@@ -28,8 +26,8 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
   final EmployeeService _employeeService = EmployeeService();
   List<EmployeeModel> _employees = [];
   List<EmployeeModel> _filteredEmployees = [];
-  bool _isLoading = false;
   bool _notificationsEnabled = true;
+  bool _isInitialLoading = false; // Separate state for initial body load
   AnimationController? _animationController;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
@@ -40,19 +38,6 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
     _checkAuthAndLoadEmployees();
   }
 
-  Future<void> _checkAuthAndLoadEmployees() async {
-    final authController = Provider.of<AuthController>(context, listen: false);
-
-    // Verificar si el usuario está autenticado y verificado
-    if (!authController.isAuthenticated || !authController.isVerified) {
-      // Si no está autenticado o verificado, no cargar empleados
-      return;
-    }
-
-    // Si está autenticado y verificado, cargar empleados
-    _loadEmployees();
-  }
-
   void _initializeAnimations() {
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 800),
@@ -61,11 +46,27 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
     _animationController!.forward();
   }
 
-  Future<void> _loadEmployees() async {
-    setState(() {
-      _isLoading = true;
-    });
+  @override
+  void dispose() {
+    _animationController?.dispose();
+    super.dispose();
+  }
 
+  void _checkAuthAndLoadEmployees() {
+    // Verificar si el usuario está autenticado
+    final authController = Provider.of<AuthController>(context, listen: false);
+    if (authController.currentUser != null) {
+      _loadEmployees();
+    } else {
+      // Reintentar en un momento si aún no está inicializado
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) _checkAuthAndLoadEmployees();
+      });
+    }
+  }
+
+  Future<void> _loadEmployees() async {
+    setState(() => _isInitialLoading = true);
     try {
       final response = await _employeeService.getEmployees();
 
@@ -73,21 +74,16 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
         setState(() {
           _employees = response.data!;
           _filteredEmployees = _employees;
-          _isLoading = false;
+          _isInitialLoading = false;
         });
         _updateNotificationsToggleState();
       } else {
-        setState(() {
-          _isLoading = false;
-        });
-        // Don't show error for empty employee list - just show empty state
+        setState(() => _isInitialLoading = false);
+        if (mounted) SnackBarHelper.showError(context, response.message);
       }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-
       if (mounted) {
+        setState(() => _isInitialLoading = false);
         SnackBarHelper.showError(context, 'Error al cargar empleados: $e');
       }
     }
@@ -100,93 +96,102 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
       } else {
         _filteredEmployees = _employees
             .where(
-              (employee) =>
-                  employee.nombre.toLowerCase().contains(query.toLowerCase()) ||
-                  employee.telefono.contains(query),
+              (e) =>
+                  e.nombre.toLowerCase().contains(query.toLowerCase()) ||
+                  e.telefono.contains(query),
             )
             .toList();
       }
     });
   }
 
+  void _updateNotificationsToggleState() {
+    if (_employees.isEmpty) {
+      setState(() => _notificationsEnabled = false);
+      return;
+    }
+
+    // Si al menos uno tiene notificaciones activas, el toggle global está activo
+    final anyActive = _employees.any((e) => e.notificacionesActivas ?? false);
+    setState(() => _notificationsEnabled = anyActive);
+  }
+
   Future<void> _toggleAllNotifications() async {
-    await executeSilently(
-      () async {
-        // Obtener el estado actual basado en todos los empleados
-        final bool allEnabled = _employees.every((employee) => employee.activo);
-        final bool newState = !allEnabled;
+    await executeSilently(() async {
+      final newState = !_notificationsEnabled;
+      final response = await _employeeService.toggleAllNotifications(newState);
 
-        // Realizar la operación en el backend
-        final response = await _employeeService.toggleAllNotifications(
-          newState,
-        );
-
-        if (response.isSuccess) {
-          // Actualizar UI solo después del éxito
-          setState(() {
-            _employees = _employees
-                .map((employee) => employee.copyWith(activo: newState))
-                .toList();
-            _filteredEmployees = _employees;
-            _notificationsEnabled = newState;
-          });
-        } else {
-          throw Exception(response.message);
+      if (response.isSuccess) {
+        setState(() {
+          _notificationsEnabled = newState;
+          // Actualizar localmente para feedback inmediato
+          for (var i = 0; i < _employees.length; i++) {
+            _employees[i] = _employees[i].copyWith(
+              notificacionesActivas: newState,
+            );
+          }
+          _filteredEmployees = List.from(_employees);
+        });
+        if (mounted) {
+          SnackBarHelper.showSuccess(
+            context,
+            newState
+                ? 'Notificaciones activadas para todos'
+                : 'Notificaciones desactivadas para todos',
+          );
         }
-      },
-      loadingMessage: _notificationsEnabled
-          ? 'Desactivando notificaciones para todos...'
-          : 'Activando notificaciones para todos...',
-      errorMessage: 'Error al actualizar notificaciones',
-    );
+      }
+    }, loadingMessage: 'Actualizando notificaciones...');
   }
 
-  void _addEmployee() async {
-    final authController = Provider.of<AuthController>(context, listen: false);
-    final currentUser = authController.currentUser;
-    if (currentUser == null) return;
+  Future<void> _toggleEmployeeNotifications(EmployeeModel employee) async {
+    final newState = !(employee.notificacionesActivas ?? false);
 
-    await showDialog(
-      context: context,
-      builder: (context) => AddEmployeeDialog(
-        ownerId: currentUser.id,
-        onEmployeeAdded: (employee) {
-          setState(() {
-            _employees.add(employee);
-            _filteredEmployees = _employees;
-          });
-          _updateNotificationsToggleState();
-        },
-      ),
-    );
+    setState(() {
+      final index = _employees.indexWhere((e) => e.id == employee.id);
+      if (index != -1) {
+        _employees[index] = employee.copyWith(notificacionesActivas: newState);
+        _filteredEmployees = List.from(_employees);
+      }
+    });
+
+    try {
+      final response = await _employeeService.updateNotificationConfig(
+        employeeId: employee.id,
+        notificacionesActivas: newState,
+      );
+
+      if (!response.isSuccess) {
+        // Revertir en caso de error
+        setState(() {
+          final index = _employees.indexWhere((e) => e.id == employee.id);
+          if (index != -1) {
+            _employees[index] = employee.copyWith(
+              notificacionesActivas: !newState,
+            );
+            _filteredEmployees = List.from(_employees);
+          }
+        });
+        if (mounted) SnackBarHelper.showError(context, response.message);
+      } else {
+        _updateNotificationsToggleState();
+      }
+    } catch (e) {
+      // Revertir
+      setState(() {
+        final index = _employees.indexWhere((e) => e.id == employee.id);
+        if (index != -1) {
+          _employees[index] = employee.copyWith(
+            notificacionesActivas: !newState,
+          );
+          _filteredEmployees = List.from(_employees);
+        }
+      });
+    }
   }
 
-  void _editEmployee(EmployeeModel employee) async {
-    final authController = Provider.of<AuthController>(context, listen: false);
-    final currentUser = authController.currentUser;
-    if (currentUser == null) return;
-
-    await showDialog(
-      context: context,
-      builder: (context) => EditEmployeeDialog(
-        ownerId: currentUser.id,
-        employee: employee,
-        onEmployeeUpdated: (updatedEmployee) {
-          setState(() {
-            final index = _employees.indexWhere((emp) => emp.id == employee.id);
-            if (index != -1) {
-              _employees[index] = updatedEmployee;
-              _filteredEmployees = _employees;
-            }
-            _updateNotificationsToggleState();
-          });
-        },
-      ),
-    );
-  }
-
-  void _deleteEmployee(EmployeeModel employee) {
-    showDialog(
+  Future<void> _deleteEmployee(EmployeeModel employee) async {
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Eliminar Empleado'),
@@ -195,102 +200,83 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () async {
-              try {
-                final response = await _employeeService.deleteEmployee(
-                  employee.id,
-                );
-
-                if (response.isSuccess) {
-                  setState(() {
-                    _employees.removeWhere((e) => e.id == employee.id);
-                    _filteredEmployees = _employees;
-                    _updateNotificationsToggleState();
-                  });
-
-                  // Sin SnackBar de éxito para evitar latencia
-                } else {
-                  if (context.mounted) {
-                    SnackBarHelper.showError(
-                      context,
-                      ErrorHelper.processApiError(response),
-                    );
-                  }
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  SnackBarHelper.showError(context, 'Error: $e');
-                }
-              }
-
-              if (context.mounted) {
-                Navigator.pop(context);
-              }
-            },
+            onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: DesignSystem.errorColor,
+              foregroundColor: Colors.white,
             ),
             child: const Text('Eliminar'),
           ),
         ],
       ),
     );
-  }
 
-  Future<void> _toggleEmployeeNotifications(EmployeeModel employee) async {
-    await executeSilently(
-      () async {
-        final bool newState = !employee.activo;
-        final int employeeIndex = _employees.indexWhere(
-          (emp) => emp.id == employee.id,
-        );
-
-        if (employeeIndex == -1) {
-          return;
-        }
-
-        // Realizar la operación en el backend
-        final response = await _employeeService.updateNotificationConfig(
-          employeeId: employee.id,
-          notificacionesActivas: newState,
-        );
-
+    if (confirmed == true) {
+      await executeWithLoading(() async {
+        final response = await _employeeService.deleteEmployee(employee.id);
         if (response.isSuccess) {
-          // Actualizar UI solo después del éxito
           setState(() {
-            _employees[employeeIndex] = _employees[employeeIndex].copyWith(
-              activo: newState,
-            );
-            _filteredEmployees = _employees;
-            _updateNotificationsToggleState();
+            _employees.removeWhere((e) => e.id == employee.id);
+            _filteredEmployees = List.from(_employees);
           });
-        } else {
-          throw Exception(response.message);
+          if (mounted) {
+            SnackBarHelper.showSuccess(context, 'Empleado eliminado');
+          }
         }
-      },
-      loadingMessage:
-          '${employee.nombre}: ${employee.activo ? 'Desactivando notificaciones...' : 'Activando notificaciones...'}',
-      errorMessage: 'Error al actualizar notificaciones de ${employee.nombre}',
-    );
-  }
-
-  void _updateNotificationsToggleState() {
-    // Verificar si todos los empleados tienen notificaciones activadas
-    if (_employees.isEmpty) {
-      _notificationsEnabled = false;
-    } else {
-      _notificationsEnabled = _employees.every((employee) => employee.activo);
+      }, loadingMessage: 'Eliminando...');
     }
   }
 
-  @override
-  void dispose() {
-    _animationController?.dispose();
-    super.dispose();
+  void _showAddEmployeeDialog() {
+    final authController = Provider.of<AuthController>(context, listen: false);
+    final user = authController.currentUser;
+
+    if (user == null) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => AddEmployeeDialog(
+        ownerId: user.id,
+        onEmployeeAdded: (newEmployee) {
+          setState(() {
+            _employees.add(newEmployee);
+            _filteredEmployees = List.from(_employees);
+          });
+          _updateNotificationsToggleState();
+        },
+      ),
+    );
+  }
+
+  void _showEditEmployeeDialog(EmployeeModel employee) {
+    final authController = Provider.of<AuthController>(context, listen: false);
+    final user = authController.currentUser;
+
+    if (user == null) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => EditEmployeeDialog(
+        ownerId: user.id,
+        employee: employee,
+        onEmployeeUpdated: (updatedEmployee) {
+          setState(() {
+            final index = _employees.indexWhere(
+              (e) => e.id == updatedEmployee.id,
+            );
+            if (index != -1) {
+              _employees[index] = updatedEmployee;
+              _filteredEmployees = List.from(_employees);
+            }
+          });
+          _updateNotificationsToggleState();
+        },
+      ),
+    );
   }
 
   @override
@@ -298,118 +284,78 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
     return LoadingOverlay(
       isLoading: isLoading,
       message: loadingMessage,
-      child: Scaffold(
-        key: _scaffoldKey,
-        backgroundColor: DesignSystem.backgroundColor,
-        drawer: AdminDrawer(
-          user: Provider.of<AuthController>(context).currentUser,
-          authController: Provider.of<AuthController>(context, listen: false),
-        ),
-        body: Column(
-          children: [
-            _buildHeader(context),
-            _buildNotificationsToggle(),
-            _buildSearchBar(),
-            Expanded(child: _buildEmployeeList()),
-          ],
-        ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: isLoading ? null : _addEmployee,
-          backgroundColor: isLoading
-              ? DesignSystem.textTertiary
-              : DesignSystem.primaryColor,
-          child: const Icon(Icons.add, color: Colors.white),
-        ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    return AppHeader(
-      title: 'Feelin Pay - Empleados',
-      subtitle: 'Administración de personal',
-      onMenuPressed: () => _scaffoldKey.currentState?.openDrawer(),
-      menuItems: [
-        ThreeDotsMenuItem(
-          icon: Icons.refresh,
-          title: 'Actualizar',
-          onTap: _loadEmployees,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildNotificationsToggle() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: DesignSystem.spacingM),
-      child: Row(
-        children: [
-          Icon(
-            _notificationsEnabled
-                ? Icons.notifications_off
-                : Icons.notifications,
-            color: _notificationsEnabled
-                ? DesignSystem.primaryColor
-                : DesignSystem.textTertiary,
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          Navigator.of(context).pushReplacementNamed('/dashboard');
+        },
+        child: Scaffold(
+          key: _scaffoldKey,
+          backgroundColor: DesignSystem.backgroundColor,
+          drawer: AdminDrawer(
+            user: Provider.of<AuthController>(context).currentUser,
+            authController: Provider.of<AuthController>(context, listen: false),
           ),
-          const SizedBox(width: DesignSystem.spacingS),
-          Text(
-            _notificationsEnabled
-                ? 'Desactivar notificaciones a todos'
-                : 'Activar notificaciones a todos',
-            style: TextStyle(
-              color: _notificationsEnabled
-                  ? DesignSystem.primaryColor
-                  : DesignSystem.textTertiary,
-              fontWeight: FontWeight.w500,
-            ),
+          floatingActionButton: FloatingActionButton(
+            onPressed: _showAddEmployeeDialog,
+            backgroundColor: DesignSystem.primaryColor,
+            child: const Icon(Icons.add, color: Colors.white),
           ),
-          const Spacer(),
-          Switch(
-            value: _notificationsEnabled,
-            onChanged: (value) => _toggleAllNotifications(),
-            activeThumbColor: DesignSystem.primaryColor,
+          body: Column(
+            children: [
+              AppHeader(
+                title: 'Mis Empleados',
+                subtitle: 'Gestiona tu equipo de trabajo',
+                onMenuPressed: () => _scaffoldKey.currentState?.openDrawer(),
+                showMenu: true,
+                menuItems: [
+                  ThreeDotsMenuItem(
+                    icon: Icons.refresh,
+                    title: 'Actualizar Lista',
+                    onTap: _loadEmployees,
+                  ),
+                ],
+              ),
+              _buildSearchBar(),
+              _buildGlobalToggle(),
+              Expanded(child: _buildEmployeeList()),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildSearchBar() {
-    return Container(
+    return Padding(
       padding: const EdgeInsets.all(DesignSystem.spacingM),
       child: TextField(
         onChanged: _filterEmployees,
         decoration: InputDecoration(
-          hintText: 'Buscar empleados...',
+          hintText: 'Buscar empleado...',
           prefixIcon: const Icon(
             Icons.search,
-            color: DesignSystem.textSecondary,
+            color: DesignSystem.textTertiary,
           ),
+          filled: true,
+          fillColor: Colors.white,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-            borderSide: BorderSide(
-              color: DesignSystem.textTertiary.withValues(alpha: 0.3),
-            ),
+            borderSide: BorderSide.none,
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-            borderSide: BorderSide(
-              color: DesignSystem.textTertiary.withValues(alpha: 0.3),
-            ),
+            borderSide: BorderSide.none,
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(DesignSystem.radiusM),
             borderSide: const BorderSide(
               color: DesignSystem.primaryColor,
-              width: 2,
+              width: 1,
             ),
           ),
-          filled: true,
-          fillColor: DesignSystem.surfaceColor,
           contentPadding: const EdgeInsets.symmetric(
-            horizontal: DesignSystem.spacingM,
             vertical: DesignSystem.spacingM,
           ),
         ),
@@ -417,147 +363,205 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
     );
   }
 
+  Widget _buildGlobalToggle() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: DesignSystem.spacingM),
+      child: Container(
+        padding: const EdgeInsets.all(DesignSystem.spacingM),
+        decoration: BoxDecoration(
+          color: DesignSystem.primaryColor.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(DesignSystem.radiusM),
+          border: Border.all(
+            color: DesignSystem.primaryColor.withValues(alpha: 0.1),
+          ),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.notifications_active_outlined,
+              color: DesignSystem.primaryColor,
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Notificaciones Globales',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  Text(
+                    'Activa/Desactiva para todos',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: DesignSystem.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Switch(
+              value: _notificationsEnabled,
+              onChanged: (val) => _toggleAllNotifications(),
+              activeThumbColor: DesignSystem.primaryColor,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildEmployeeList() {
-    if (_isLoading) {
+    if (_isInitialLoading) {
       return const Center(
         child: CircularProgressIndicator(color: DesignSystem.primaryColor),
       );
     }
 
     if (_filteredEmployees.isEmpty) {
-      return const Center(
-        child: Text(
-          'No hay empleados registrados',
-          style: TextStyle(
-            color: DesignSystem.textSecondary,
-            fontSize: DesignSystem.fontSizeM,
-          ),
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.people_outline,
+              size: 64,
+              color: DesignSystem.textTertiary.withValues(alpha: 0.5),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'No se encontraron empleados',
+              style: TextStyle(
+                color: DesignSystem.textSecondary,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ),
       );
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(
-        DesignSystem.spacingM,
-        0,
-        DesignSystem.spacingM,
-        DesignSystem.spacingXL + 20, // Padding inferior para el botón flotante
-      ),
+      padding: const EdgeInsets.all(DesignSystem.spacingM),
       itemCount: _filteredEmployees.length,
       itemBuilder: (context, index) {
         final employee = _filteredEmployees[index];
-        return _buildEmployeeItem(employee);
+        return _buildEmployeeCard(employee, index);
       },
     );
   }
 
-  Widget _buildEmployeeItem(EmployeeModel employee) {
+  Widget _buildEmployeeCard(EmployeeModel employee, int index) {
+    // OPTIMIZATION: Removed Animations for performance on low-end devices
     return Container(
-      margin: const EdgeInsets.only(bottom: DesignSystem.spacingS),
+      margin: const EdgeInsets.only(bottom: DesignSystem.spacingM),
       decoration: BoxDecoration(
-        color: DesignSystem.surfaceColor,
-        borderRadius: BorderRadius.circular(DesignSystem.radiusM),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(DesignSystem.radiusL),
+        // OPTIMIZATION: Shadows removed for performance
+        boxShadow: [],
       ),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: DesignSystem.primaryColor.withValues(alpha: 0.1),
-          child: Text(
-            employee.nombre[0].toUpperCase(),
-            style: const TextStyle(
-              color: DesignSystem.primaryColor,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        title: Text(
-          employee.nombre,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            color: DesignSystem.textPrimary,
-          ),
-        ),
-        subtitle: Text(
-          employee.telefono,
-          style: const TextStyle(color: DesignSystem.textSecondary),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              onPressed: () => _toggleEmployeeNotifications(employee),
-              icon: Icon(
-                employee.activo ? Icons.notifications : Icons.notifications_off,
-                color: employee.activo
-                    ? DesignSystem.primaryColor
-                    : DesignSystem.textTertiary,
-              ),
-            ),
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                switch (value) {
-                  case 'edit':
-                    _editEmployee(employee);
-                    break;
-                  case 'schedule':
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            ScheduleManagementScreen(employee: employee),
-                      ),
-                    );
-                    break;
-                  case 'delete':
-                    _deleteEmployee(employee);
-                    break;
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Row(
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(DesignSystem.radiusL),
+        child: InkWell(
+          onTap: () => _showEditEmployeeDialog(employee),
+          borderRadius: BorderRadius.circular(DesignSystem.radiusL),
+          child: Padding(
+            padding: const EdgeInsets.all(DesignSystem.spacingM),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: DesignSystem.primaryColor.withValues(
+                    alpha: 0.1,
+                  ),
+                  child: Text(
+                    employee.nombre[0].toUpperCase(),
+                    style: const TextStyle(
+                      color: DesignSystem.primaryColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.edit, color: DesignSystem.primaryColor),
-                      SizedBox(width: DesignSystem.spacingS),
-                      Text('Editar'),
+                      Text(
+                        employee.nombre,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.phone_android,
+                            size: 14,
+                            color: DesignSystem.textTertiary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            employee.telefono,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: DesignSystem.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
-                // --- NEW ITEM START ---
-                const PopupMenuItem(
-                  value: 'schedule',
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.calendar_month,
-                        color: DesignSystem.secondaryColor,
-                      ),
-                      SizedBox(width: DesignSystem.spacingS),
-                      Text('Gestionar Horario'),
-                    ],
-                  ),
-                ),
-                // --- NEW ITEM END ---
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete, color: DesignSystem.errorColor),
-                      SizedBox(width: DesignSystem.spacingS),
-                      Text('Eliminar'),
-                    ],
-                  ),
+                Column(
+                  children: [
+                    Switch(
+                      value: employee.notificacionesActivas ?? false,
+                      onChanged: (val) =>
+                          _toggleEmployeeNotifications(employee),
+                      activeThumbColor: DesignSystem.successColor,
+                    ),
+                    ThreeDotsMenuWidget(
+                      items: [
+                        ThreeDotsMenuItem(
+                          icon: Icons.edit_outlined,
+                          title: 'Editar',
+                          onTap: () => _showEditEmployeeDialog(employee),
+                        ),
+                        ThreeDotsMenuItem(
+                          icon: Icons.calendar_month_outlined,
+                          title: 'Horarios',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ScheduleManagementScreen(
+                                  employee: employee,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        ThreeDotsMenuItem(
+                          icon: Icons.delete_outline,
+                          title: 'Eliminar',
+                          iconColor: DesignSystem.errorColor,
+                          textColor: DesignSystem.errorColor,
+                          onTap: () => _deleteEmployee(employee),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );

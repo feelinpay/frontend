@@ -7,6 +7,9 @@ import '../widgets/three_dots_menu_widget.dart';
 import '../widgets/app_header.dart';
 import '../widgets/admin_drawer.dart';
 import '../core/widgets/responsive_widgets.dart';
+import '../services/payment_notification_service.dart';
+import '../services/sms_service.dart';
+import '../services/background_service.dart';
 
 class OwnerDashboard extends StatefulWidget {
   const OwnerDashboard({super.key});
@@ -15,11 +18,8 @@ class OwnerDashboard extends StatefulWidget {
   State<OwnerDashboard> createState() => _OwnerDashboardState();
 }
 
-class _OwnerDashboardState extends State<OwnerDashboard>
-    with TickerProviderStateMixin {
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
+class _OwnerDashboardState extends State<OwnerDashboard> {
+  // OPTIMIZATION: Removed AnimationController and Mixin for performance
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   Map<String, dynamic>? _statistics;
@@ -29,36 +29,37 @@ class _OwnerDashboardState extends State<OwnerDashboard>
   @override
   void initState() {
     super.initState();
-    _initializeAnimations();
     _loadStatistics();
+
+    // PERFORMANCE FIX: Start services AFTER the UI is rendered.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startBackgroundServices();
+    });
   }
 
-  void _initializeAnimations() {
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 1000),
-      vsync: this,
-    );
+  Future<void> _startBackgroundServices() async {
+    try {
+      final authController = Provider.of<AuthController>(
+        context,
+        listen: false,
+      );
+      final user = authController.currentUser;
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
-    );
+      if (user != null) {
+        // debugPrint("🚀 OwnerDashboard: Starting background services...");
+        await PaymentNotificationService.init(user);
 
-    _slideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _animationController,
-            curve: Curves.easeOutCubic,
-          ),
-        );
+        // Reminder: Listener is manual (Bridge Mode)
 
-    _animationController.forward();
+        await SMSService.procesarSMSPendientes();
+        await BackgroundService.start();
+      }
+    } catch (e) {
+      // Siltently fail or log if needed, but don't crash dashboard
+    }
   }
 
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
+  // OPTIMIZATION: Removed _initializeAnimations and dispose() as they're no longer needed
 
   Future<void> _loadStatistics() async {
     setState(() {
@@ -68,7 +69,8 @@ class _OwnerDashboardState extends State<OwnerDashboard>
 
     try {
       // Por ahora usamos datos mock
-      await Future.delayed(const Duration(milliseconds: 500));
+      // OPTIMIZATION: Removed artificial delay for instant loading
+      // await Future.delayed(const Duration(milliseconds: 500));
 
       setState(() {
         _statistics = {
@@ -84,13 +86,12 @@ class _OwnerDashboardState extends State<OwnerDashboard>
         _error = 'Error al cargar estadísticas: $e';
         _isLoading = false;
       });
-      // Error silenced
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authController = context.read<AuthController>();
+    final authController = context.watch<AuthController>();
     final currentUser = authController.currentUser;
 
     return Scaffold(
@@ -152,26 +153,20 @@ class _OwnerDashboardState extends State<OwnerDashboard>
                       ],
                     ),
                   )
-                : FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: SlideTransition(
-                      position: _slideAnimation,
-                      child: ResponsiveContainer(
-                        maxWidth: 1000,
-                        padding: const EdgeInsets.all(DesignSystem.spacingM),
-                        child: SingleChildScrollView(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Estadísticas principales
-                              _buildStatsSection(),
-                              const SizedBox(height: DesignSystem.spacingXL),
+                : ResponsiveContainer(
+                    maxWidth: 1000,
+                    padding: const EdgeInsets.all(DesignSystem.spacingM),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Estadísticas principales
+                          _buildStatsSection(),
+                          const SizedBox(height: DesignSystem.spacingXL),
 
-                              // Atajos de Gestión
-                              _buildManagementShortcuts(context),
-                            ],
-                          ),
-                        ),
+                          // Atajos de Gestión
+                          _buildManagementShortcuts(context),
+                        ],
                       ),
                     ),
                   ),

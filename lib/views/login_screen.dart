@@ -73,12 +73,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         color: DesignSystem.primaryColor.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: const SizedBox(
+                      child: SizedBox(
                         width: 60,
                         height: 60,
-                        child: Image(
-                          image: AssetImage('assets/logo.png'),
-                          fit: BoxFit.contain,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: const Image(
+                            image: AssetImage('assets/logo.png'),
+                            fit: BoxFit.contain,
+                          ),
                         ),
                       ),
                     ),

@@ -317,7 +317,11 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen>
             radius: 20,
             backgroundColor: DesignSystem.primaryColor.withValues(alpha: 0.1),
             backgroundImage: widget.owner.imagen != null
-                ? NetworkImage(widget.owner.imagen!)
+                ? ResizeImage(
+                    NetworkImage(widget.owner.imagen!),
+                    width: 120,
+                    policy: ResizeImagePolicy.fit,
+                  )
                 : null,
             child: widget.owner.imagen == null
                 ? Text(

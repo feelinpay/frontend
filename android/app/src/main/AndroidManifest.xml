@@ -24,6 +24,7 @@
         android:label="Feelin Pay"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
+        android:enableOnBackInvokedCallback="true"
         android:usesCleartextTraffic="true">
         
         <activity
@@ -48,6 +49,10 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@mipmap/launcher_icon" />
             
         <!-- Servicio para escuchar notificaciones de pago (flutter_notification_listener_plus) -->
         <service android:name="im.zoe.labs.flutter_notification_listener.NotificationsHandlerService"

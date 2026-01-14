@@ -122,12 +122,15 @@ class _SplashScreenState extends State<SplashScreen>
                         ),
                       ],
                     ),
-                    child: const Center(
+                    child: Center(
                       child: Padding(
-                        padding: EdgeInsets.all(20.0),
-                        child: Image(
-                          image: AssetImage('assets/logo.png'),
-                          fit: BoxFit.contain,
+                        padding: const EdgeInsets.all(20.0),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: const Image(
+                            image: AssetImage('assets/logo.png'),
+                            fit: BoxFit.contain,
+                          ),
                         ),
                       ),
                     ),

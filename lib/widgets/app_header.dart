@@ -115,7 +115,11 @@ class AppHeader extends StatelessWidget {
                     border: Border.all(color: Colors.white, width: 2),
                     image: user?.imagen != null
                         ? DecorationImage(
-                            image: NetworkImage(user!.imagen!),
+                            image: ResizeImage(
+                              NetworkImage(user!.imagen!),
+                              width: 100,
+                              policy: ResizeImagePolicy.fit,
+                            ),
                             fit: BoxFit.cover,
                           )
                         : null,

@@ -92,37 +92,33 @@ class DesignSystem {
   static const Curve curveEaseInOut = Curves.easeInOut;
   static const Curve curveBounceOut = Curves.bounceOut;
 
-  // Gradientes
+  // Gradientes - OPTIMIZED: Simplified for low-end devices
+  // Removed complex gradients to reduce GPU overdraw
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [primaryColor, primaryLight],
+    colors: [primaryColor, primaryColor], // Solid color impersonating gradient
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const LinearGradient secondaryGradient = LinearGradient(
-    colors: [secondaryColor, Color(0xFFA855F7)],
+    colors: [secondaryColor, secondaryColor],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const LinearGradient successGradient = LinearGradient(
-    colors: [successColor, Color(0xFF34D399)],
+    colors: [successColor, successColor],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  // Sombras
-  static const List<BoxShadow> shadowS = [
-    BoxShadow(color: Color(0x0A000000), blurRadius: 4, offset: Offset(0, 2)),
-  ];
+  // Sombras - OPTIMIZED: Removed shadows to eliminate rasterization cost
+  // This makes the UI flat but extremely fast
+  static const List<BoxShadow> shadowS = [];
 
-  static const List<BoxShadow> shadowM = [
-    BoxShadow(color: Color(0x14000000), blurRadius: 8, offset: Offset(0, 4)),
-  ];
+  static const List<BoxShadow> shadowM = [];
 
-  static const List<BoxShadow> shadowL = [
-    BoxShadow(color: Color(0x1A000000), blurRadius: 16, offset: Offset(0, 8)),
-  ];
+  static const List<BoxShadow> shadowL = [];
 
   // Métodos de utilidad
   static bool isMobile(BuildContext context) {
@@ -180,7 +176,7 @@ class DesignSystem {
         seedColor: primaryColor,
         brightness: Brightness.light,
       ),
-      fontFamily: 'Inter',
+      // fontFamily: 'Inter',
       textTheme: const TextTheme(
         displayLarge: TextStyle(
           fontSize: fontSizeXXL,
@@ -293,6 +289,13 @@ class DesignSystem {
           color: textPrimary,
         ),
       ),
+      // PERF: Disable page transition animations for low-end devices
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: _NoTransitionsBuilder(),
+          TargetPlatform.iOS: _NoTransitionsBuilder(),
+        },
+      ),
     );
   }
 
@@ -310,5 +313,21 @@ class DesignSystem {
     );
     // Activa el modo edge-to-edge real (Android 10+)
     // SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); // Comentado temporalmente para estabilidad
+  }
+}
+
+// Optimization: Zero cost transition
+class _NoTransitionsBuilder extends PageTransitionsBuilder {
+  const _NoTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return child;
   }
 }

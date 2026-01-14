@@ -79,8 +79,17 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> {
     };
 
     if (response.isSuccess && response.data != null) {
+      debugPrint("🗓️ RAW SCHEDULE DATA: ${response.data}"); // DEBUG LOG
       for (var item in response.data!) {
-        final day = item['diaSemana'] as String;
+        debugPrint("  -> Item: $item"); // DEBUG LOG
+
+        // Use toString() to be safe against int/string differences
+        var dayRaw = item['diaSemana']?.toString() ?? '';
+
+        // MAPPING FIX: Backend might send "1".."7" or English names. Map to Spanish.
+        var day = _mapDayToSpanish(dayRaw);
+        debugPrint("  -> Mapped '$dayRaw' to '$day'"); // DEBUG LOG
+
         if (_daysOfWeek.contains(day)) {
           newSchedules[day]!.add({
             'id': item['id'],
@@ -90,6 +99,8 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> {
           });
         }
       }
+    } else {
+      debugPrint("❌ Failed to load schedules: ${response.message}");
     }
 
     _schedules = newSchedules;
@@ -107,6 +118,39 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> {
 
   String _formatTime(TimeOfDay time) {
     return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _mapDayToSpanish(String unknownDay) {
+    // 1. Try direct match with digits (1=Lunes, 7=Domingo)
+    switch (unknownDay) {
+      case '1':
+        return 'Lunes';
+      case '2':
+        return 'Martes';
+      case '3':
+        return 'Miércoles';
+      case '4':
+        return 'Jueves';
+      case '5':
+        return 'Viernes';
+      case '6':
+        return 'Sábado';
+      case '7':
+        return 'Domingo';
+    }
+
+    // 2. Try English names
+    final lower = unknownDay.toLowerCase();
+    if (lower.contains('mon')) return 'Lunes';
+    if (lower.contains('tue')) return 'Martes';
+    if (lower.contains('wed')) return 'Miércoles';
+    if (lower.contains('thu')) return 'Jueves';
+    if (lower.contains('fri')) return 'Viernes';
+    if (lower.contains('sat')) return 'Sábado';
+    if (lower.contains('sun')) return 'Domingo';
+
+    // 3. Return original if nothing matches (hopefully it's already Spanish)
+    return unknownDay;
   }
 
   Future<void> _saveDaySchedule(String day) async {
@@ -164,6 +208,9 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> {
     // 2. Guardar/Actualizar horarios vigentes
     await Future.wait(_daysOfWeek.map((day) => _saveDaySchedule(day)));
 
+    // 3. Recargar datos para sincronizar IDs generados por el backend
+    await _loadSchedules();
+
     if (!mounted) return;
 
     setState(() => _isLoading = false);
@@ -179,13 +226,7 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> {
         padding: const EdgeInsets.all(DesignSystem.spacingM),
         decoration: BoxDecoration(
           color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, -4),
-            ),
-          ],
+          boxShadow: [], // OPTIMIZATION: Removed shadow
         ),
         child: SafeArea(child: _buildSaveButton()),
       ),
@@ -273,23 +314,8 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> {
       margin: const EdgeInsets.only(bottom: DesignSystem.spacingM),
       // Layout del contenedor principal del día
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(DesignSystem.radiusL),
-        boxShadow: hasActiveSchedules
-            ? [
-                BoxShadow(
-                  color: DesignSystem.primaryColor.withValues(alpha: 0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ]
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+        // OPTIMIZATION: Shadows removed for performance
+        boxShadow: [],
         border: hasActiveSchedules
             ? Border.all(
                 color: DesignSystem.primaryColor.withValues(alpha: 0.3),

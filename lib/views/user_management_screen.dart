@@ -11,6 +11,7 @@ import '../core/design/design_system.dart';
 import '../widgets/assign_membership_dialog.dart';
 import '../widgets/membership_status_badge.dart';
 import 'owner_employees_screen.dart';
+import '../widgets/loading_overlay.dart';
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -19,13 +20,14 @@ class UserManagementScreen extends StatefulWidget {
   State<UserManagementScreen> createState() => _UserManagementScreenState();
 }
 
-class _UserManagementScreenState extends State<UserManagementScreen> {
-  bool _isLoading = true;
+class _UserManagementScreenState extends State<UserManagementScreen>
+    with LoadingStateMixin {
   List<UserModel> _users = [];
   List<dynamic> _roles = [];
   String? _error;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final UserManagementService _userManagementService = UserManagementService();
+  bool _isInitialLoading = false;
 
   @override
   void initState() {
@@ -34,63 +36,38 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   Future<void> _loadData() async {
+    setState(() => _isInitialLoading = true);
     try {
-      if (mounted) {
-        setState(() {
-          _isLoading = true;
-          _error = null;
-        });
-      }
-
+      _error = null;
       // Cargar usuarios y roles en paralelo
       await Future.wait([_loadUsers(), _loadRoles()]);
-
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isInitialLoading = false);
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _error = 'Error de conexión: $e';
-          _isLoading = false;
-        });
+        setState(() => _isInitialLoading = false);
+        // Error is handled by _buildErrorWidget via _error state or individual load methods could set it
+        // Check if _loadUsers sets state on error? No, it rethrows.
+        // So we should catch it here and set _error if we want the error widget.
+        setState(() => _error = e.toString());
       }
     }
   }
 
   Future<void> _loadUsers() async {
-    try {
-      final response = await _userManagementService.getAllUsers();
-
-      if (response.isSuccess && response.data != null) {
-        setState(() {
-          _users = response.data!;
-        });
-      } else {
-        throw Exception('Error al cargar usuarios: ${response.message}');
-      }
-    } catch (e) {
-      debugPrint('Error cargando usuarios: $e');
-      rethrow;
+    final response = await _userManagementService.getAllUsers();
+    if (response.isSuccess && response.data != null) {
+      setState(() => _users = response.data!);
+    } else {
+      throw Exception(response.message);
     }
   }
 
   Future<void> _loadRoles() async {
-    try {
-      final response = await _userManagementService.getRoles();
-
-      if (response.isSuccess && response.data != null) {
-        setState(() {
-          _roles = response.data!;
-        });
-      } else {
-        throw Exception('Error al cargar roles: ${response.message}');
-      }
-    } catch (e) {
-      debugPrint('Error cargando roles: $e');
-      rethrow;
+    final response = await _userManagementService.getRoles();
+    if (response.isSuccess && response.data != null) {
+      setState(() => _roles = response.data!);
+    } else {
+      throw Exception(response.message);
     }
   }
 
@@ -122,13 +99,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     if (confirmed == true) {
       if (!mounted) return;
 
-      // Mostrar loading manual ya que no tenemos executeSilently aquí o usar setState
-      SnackBarHelper.showLoading(
-        context,
-        'Eliminando usuario ${user.nombre}...',
-      );
-
-      try {
+      await executeWithLoading(() async {
         final response = await _userManagementService.deleteUser(user.id);
 
         if (response.isSuccess) {
@@ -144,16 +115,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         } else {
           if (mounted) SnackBarHelper.showError(context, response.message);
         }
-      } catch (e) {
-        if (mounted) {
-          SnackBarHelper.showError(context, 'Error al eliminar usuario: $e');
-        }
-      }
+      }, loadingMessage: 'Eliminando usuario...');
     }
   }
 
   Future<void> _toggleUserStatus(UserModel user) async {
-    try {
+    await executeWithLoading(() async {
       final response = await _userManagementService.toggleUserStatus(user.id);
 
       if (response.isSuccess && response.data != null) {
@@ -167,45 +134,56 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       } else {
         if (mounted) SnackBarHelper.showError(context, response.message);
       }
-    } catch (e) {
-      if (mounted) SnackBarHelper.showError(context, 'Error: $e');
-    }
+    }, loadingMessage: 'Actualizando estado...');
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: const Color(0xFFF8F9FE), // DesignSystem.backgroundColor
-      drawer: AdminDrawer(
-        user: Provider.of<AuthController>(context).currentUser,
-        authController: Provider.of<AuthController>(context, listen: false),
-      ),
-      body: Column(
-        children: [
-          AppHeader(
-            title: 'Gestión de Usuarios',
-            subtitle: 'Total: ${_users.length} usuarios',
-            onMenuPressed: () => _scaffoldKey.currentState?.openDrawer(),
-            menuItems: [
-              ThreeDotsMenuItem(
-                icon: Icons.refresh,
-                title: 'Actualizar',
-                onTap: _loadData,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        Navigator.of(context).pushReplacementNamed('/dashboard');
+      },
+      child: Scaffold(
+        key: _scaffoldKey,
+        backgroundColor: DesignSystem.backgroundColor,
+        drawer: AdminDrawer(
+          user: Provider.of<AuthController>(context).currentUser,
+          authController: Provider.of<AuthController>(context, listen: false),
+        ),
+        body: Column(
+          children: [
+            AppHeader(
+              title: 'Gestión de Usuarios',
+              subtitle: 'Total: ${_users.length} usuarios',
+              onMenuPressed: () => _scaffoldKey.currentState?.openDrawer(),
+              menuItems: [
+                ThreeDotsMenuItem(
+                  icon: Icons.refresh,
+                  title: 'Actualizar',
+                  onTap: _loadData,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: LoadingOverlay(
+                isLoading: isLoading, // Only for blocking actions
+                message: loadingMessage,
+                child: _isInitialLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFF8B5CF6),
+                        ),
+                      )
+                    : _error != null
+                    ? _buildErrorWidget()
+                    : _buildContent(),
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: _isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF8B5CF6)),
-                  )
-                : _error != null
-                ? _buildErrorWidget()
-                : _buildContent(),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -274,7 +252,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         leading: CircleAvatar(
           backgroundColor: _getUserColor(user.rol),
           backgroundImage: user.imagen != null && user.imagen!.isNotEmpty
-              ? NetworkImage(user.imagen!)
+              ? ResizeImage(
+                  NetworkImage(user.imagen!),
+                  width: 100,
+                  policy: ResizeImagePolicy.fit,
+                )
               : null,
           child: user.imagen != null && user.imagen!.isNotEmpty
               ? null
@@ -312,7 +294,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               children: [
                 _buildBadge('Rol', user.rol ?? 'Sin rol'),
                 const SizedBox(width: 8),
-                // Mostrar estado de membresía para propietarios
                 if (user.rol?.toLowerCase().trim() == 'propietario')
                   MembershipStatusBadge(userId: user.id),
               ],
@@ -321,7 +302,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         ),
         trailing: ThreeDotsMenuWidget(
           items: [
-            // "Ver Empleados" visible para propietarios y super admins
             if ([
               'propietario',
               'super_admin',
@@ -331,16 +311,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 title: 'Ver Empleados',
                 onTap: () => _viewEmployees(user),
               ),
-
-            // "Asignar Membresía" visible solo para propietarios
             if (user.rol?.toLowerCase().trim() == 'propietario')
               ThreeDotsMenuItem(
                 icon: Icons.card_membership,
                 title: 'Asignar Membresía',
                 onTap: () => _showAssignMembershipDialog(user),
               ),
-
-            // Acciones destructivas/administrativas OCULTAS para uno mismo
             if (!isCurrentUser) ...[
               ThreeDotsMenuItem(
                 icon: user.activo ? Icons.block : Icons.check_circle,
@@ -446,7 +422,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   Future<void> _changeUserRole(String userId, String roleId) async {
-    // Verificar si el usuario está intentando cambiar su propio rol
     final authController = Provider.of<AuthController>(context, listen: false);
     final currentUser = authController.currentUser;
 
@@ -457,11 +432,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
+    await executeWithLoading(() async {
       final response = await _userManagementService.updateUser(
         userId,
         rolId: roleId,
@@ -480,17 +451,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           );
         }
       }
-    } catch (e) {
-      if (mounted) {
-        SnackBarHelper.showError(context, 'Error: $e');
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
+    }, loadingMessage: 'Cambiando rol...');
   }
 
   Color _getUserColor(String? rol) {
