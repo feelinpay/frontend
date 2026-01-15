@@ -28,21 +28,24 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
   @override
   void initState() {
     super.initState();
-    // Ejecutar después del primer frame para asegurar que el contexto sea válido
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAndNavigateIfGranted();
-    });
+    // Solo verificar, NO navegar automáticamente (Respetar deseo del usuario)
+    _checkPermissions();
+    _setupAppLifecycleListener();
   }
-
-  // OPTIMIZATION: Removed _initializeAnimations and dispose()
 
   Future<void> _checkPermissions() async {
     final Map<Permission, PermissionStatus> statuses = {};
 
     statuses[Permission.sms] = await Permission.sms.status;
     statuses[Permission.notification] = await Permission.notification.status;
-    statuses[Permission.ignoreBatteryOptimizations] =
-        await Permission.ignoreBatteryOptimizations.status;
+
+    final batteryStatus = await Permission.ignoreBatteryOptimizations.status;
+    statuses[Permission.ignoreBatteryOptimizations] = batteryStatus;
+
+    debugPrint('🔋 Estado Batería: $batteryStatus');
+    debugPrint(
+      '📱 Listener Granted: ${await PaymentNotificationService.hasPermission}',
+    );
 
     final listenerGranted = await PaymentNotificationService.hasPermission;
 
@@ -62,10 +65,6 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
     final batteryGranted =
         _permissions[Permission.ignoreBatteryOptimizations]?.isGranted ?? false;
 
-    // Battery optimization is tricky: 'granted' means we are ignoring optimizations (good)
-    // Some devices return denied even if asked. We will be strict if possible, but allow bypass if it fails repeatedly?
-    // User requested "todos los permisos". So we enforce it.
-
     return smsGranted &&
         notificationGranted &&
         _notificationListenerGranted &&
@@ -73,64 +72,59 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
   }
 
   Future<void> _requestPermissions() async {
-    // 1. Solicitar permisos básicos primero
+    // 1. Solicitar permisos básicos
     await [Permission.sms, Permission.notification].request();
-
-    // Actualizar estado intermedio
     await _checkPermissions();
 
-    // 2. Verificar Listener (Requiere cambio de app)
+    // 2. Verificar Listener (Si falta, ir a settings)
     if (!_notificationListenerGranted) {
-      // Si no tiene permiso de listener, abrimos settings y DETENEMOS el flujo aquí.
-      // Cuando el usuario regrese, el onResume disparará _checkPermissions nuevamente.
-      // El usuario deberá presionar "Continuar" u otra vez el botón para seguir.
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Por favor activa "Feelin Pay" en la lista'),
+            content: Text('Activa "Feelin Pay" y regresa a la app'),
             duration: Duration(seconds: 4),
           ),
         );
       }
       await PaymentNotificationService.openSettings();
-      return;
+      // No retornamos aquí para permitir que vea/pida la 4ta opción después si pulsa de nuevo
     }
 
-    // 3. Solicitar optimización de batería (Solo si ya pasamos lo anterior)
-    await Permission.ignoreBatteryOptimizations.request();
-
-    // Verificación final
-    await _checkPermissions();
-
-    if (_allPermissionsGranted && mounted) {
-      _navigateToDashboard();
+    // 3. Batería (La famosa 4ta opción)
+    if (await Permission.ignoreBatteryOptimizations.isDenied) {
+      await Permission.ignoreBatteryOptimizations.request();
     }
-  }
-
-  Future<void> _checkAndNavigateIfGranted() async {
     await _checkPermissions();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _setupAppLifecycleListener();
-    });
   }
 
   void _setupAppLifecycleListener() {
     WidgetsBinding.instance.addObserver(
       _AppLifecycleObserver(() async {
-        await _checkPermissions();
+        if (mounted) {
+          await _checkPermissions();
+        }
       }),
     );
   }
 
   Future<void> _navigateToDashboard() async {
     if (_isNavigating) return;
+
+    if (!_allPermissionsGranted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor otorga todos los permisos primero'),
+        ),
+      );
+      return;
+    }
+
     _isNavigating = true;
 
     if (widget.onPermissionsGranted != null) {
       widget.onPermissionsGranted!();
     } else {
       if (mounted) {
-        // Navigate to dashboard - background services start automatically there
         Navigator.pushReplacementNamed(context, '/dashboard');
       }
     }
@@ -314,7 +308,13 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
 
     return InkWell(
       onTap: () async {
-        if (p.permission != null) {
+        if (p.permission == Permission.ignoreBatteryOptimizations) {
+          // Si es batería, SIEMPRE intentar abrir settings para que el usuario verifique
+          debugPrint(
+            '⚙️ Abriendo configuración de batería para verificación manual',
+          );
+          await p.permission!.request();
+        } else if (p.permission != null) {
           await p.permission!.request();
         } else if (p.permission == null && p.title.contains('Notificaciones')) {
           await PaymentNotificationService.openSettings();

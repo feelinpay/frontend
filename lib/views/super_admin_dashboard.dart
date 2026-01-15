@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart'; // Para kDebugMode
 import 'package:provider/provider.dart';
 import '../core/design/design_system.dart';
 import '../controllers/auth_controller.dart';
@@ -30,30 +31,38 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   void initState() {
     super.initState();
     _loadStatistics();
+    // CRITICAL: Start services asynchronously without blocking UI thread
     _startBackgroundServices();
   }
 
-  Future<void> _startBackgroundServices() async {
-    try {
-      final authController = Provider.of<AuthController>(
-        context,
-        listen: false,
-      );
-      final user = authController.currentUser;
+  void _startBackgroundServices() {
+    // Capture context before async gap
+    final currentContext = context;
 
-      if (user != null) {
-        debugPrint("🚀 SuperAdminDashboard: Starting background services...");
-        await PaymentNotificationService.init(user);
-
-        // Iniciar listener de notificaciones automáticamente
-        debugPrint(
-          "🎯 SuperAdminDashboard: Starting payment notification listener...",
+    // Run in background without blocking initState
+    Future.microtask(() async {
+      try {
+        final authController = Provider.of<AuthController>(
+          // ignore: use_build_context_synchronously
+          currentContext,
+          listen: false,
         );
-        await PaymentNotificationService.startListening(showDialog: true);
+        final user = authController.currentUser;
+
+        if (user != null) {
+          debugPrint("🚀 SuperAdminDashboard: Starting background services...");
+          await PaymentNotificationService.init(user);
+
+          // Iniciar listener de notificaciones automáticamente
+          debugPrint(
+            "🎯 SuperAdminDashboard: Starting payment notification listener...",
+          );
+          await PaymentNotificationService.startListening(showDialog: false);
+        }
+      } catch (e) {
+        debugPrint("❌ Error starting background services: $e");
       }
-    } catch (e) {
-      debugPrint("❌ Error starting background services: $e");
-    }
+    });
   }
 
   // OPTIMIZATION: Removed _initializeAnimations and dispose() as they're no longer needed
@@ -93,6 +102,24 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
     return Scaffold(
       key: _scaffoldKey,
+      // BOTÓN DE SIMULACIÓN DE YAPE (Solo Debug)
+      floatingActionButton: kDebugMode
+          ? FloatingActionButton.extended(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('🧪 Simulando Pago Yape...'),
+                    duration: Duration(seconds: 2),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+                PaymentNotificationService.simulateTestYape();
+              },
+              label: const Text('Test Yape'),
+              icon: const Icon(Icons.bug_report),
+              backgroundColor: Colors.orange,
+            )
+          : null,
       backgroundColor: DesignSystem.backgroundColor,
       drawer: AdminDrawer(user: currentUser, authController: authController),
       body: Column(

@@ -449,7 +449,7 @@ class AuthService {
     required String newEmail,
   }) async {
     final response = await _apiService.post<Map<String, dynamic>>(
-      '/owner/profile/profile/email/request',
+      '/owner/profile/email/request',
       data: {'newEmail': newEmail},
     );
 

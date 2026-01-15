@@ -1,355 +1,472 @@
+import 'dart:isolate';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_notification_listener_plus/flutter_notification_listener_plus.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:another_telephony/telephony.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 
+// CALLBACK DE SEGUNDO PLANO (DEBE ESTAR FUERA DE LA CLASE)
+@pragma('vm:entry-point')
+void onNotificationBackground(NotificationEvent evt) {
+  // ignore: avoid_print
+  print(
+    "🔵 [Bg-Isolate] Notificación entrante: ${evt.packageName} | ${evt.title}",
+  );
+
+  // Procesar directamente
+  PaymentNotificationService.handleExternalEvent(evt);
+}
+
+@pragma('vm:entry-point')
 class PaymentNotificationService {
   static final Telephony _telephony = Telephony.instance;
-  static final ApiService _apiService = ApiService();
+  static ApiService? _apiService;
+  static final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
+
   static bool _isListening = false;
   static UserModel? _currentUser;
 
-  /// Inicializa el servicio y solicita permisos
+  /// Inicializa el servicio y los plugins necesarios
   static Future<void> init(UserModel currentUser) async {
     _currentUser = currentUser;
-    await _requestPermissions();
-  }
 
-  static Future<void> _requestPermissions() async {
-    // Permiso para SMS (Solo Enviar)
-    final smsStatus = await Permission.sms.request();
-    if (!smsStatus.isGranted) {
-      debugPrint('⚠️ Permiso SEND_SMS denegado');
+    // Guardar datos para el isolate de background
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('bg_user_id', currentUser.id);
+    final token = ApiService().authToken;
+    if (token != null) {
+      await prefs.setString('bg_auth_token', token);
     }
+    debugPrint('💾 Datos de sesión guardados para procesos de fondo.');
 
-    // Permiso para Notificaciones (Android Settings)
-    // El plugin flutter_notification_listener abre la configuración si no está habilitado
-    // Lo verificamos al iniciar la escucha
-  }
+    // 1. Permisos básicos
+    await Permission.sms.request();
+    await Permission.notification.request();
 
-  /// Iniciar escucha de notificaciones de Yape
-  static Future<void> startListening({bool showDialog = false}) async {
-    debugPrint('🚀 startListening() CALLED');
-    debugPrint('   _isListening: $_isListening');
-    debugPrint('   _currentUser: ${_currentUser?.id}');
-
-    if (_isListening) {
-      debugPrint('⚠️ Ya está escuchando, saliendo...');
-      return;
-    }
-
+    // 2. Inicializar notificaciones locales
     try {
-      // Verificar si tenemos acceso a notificaciones
-      debugPrint('🔍 Verificando permisos...');
-      final bool hasPerm = await hasPermission;
-      if (!hasPerm) {
-        if (showDialog) {
-          debugPrint('⚠️ Solicitando acceso a notificaciones...');
-          await openSettings();
-        }
-        return;
-      }
-
-      // Iniciar el servicio en background (Requisito de Android para escuchar en segundo plano)
-      await NotificationsListener.startService(
-        title: "Feelin Pay",
-        description: "Escuchando notificaciones de pago",
-        subTitle: "Servicio activo",
-        showWhen: true,
-        foreground: true,
-      );
-
-      // Start native persistent notification service
-      try {
-        const platform = MethodChannel('com.example.feelin_pay/notification');
-        await platform.invokeMethod('startPersistentNotification');
-        debugPrint('✅ Native persistent notification started');
-      } catch (e) {
-        debugPrint('⚠️ Failed to start native notification: $e');
-      }
-
-      _isListening = true;
-      debugPrint('✅ Servicio de Escucha Activo');
-      debugPrint('   Usuario: ${_currentUser?.nombre} (${_currentUser?.id})');
-
-      // Suscribirse al stream de eventos
-      debugPrint('📡 Registrando listener de notificaciones...');
-
-      // CRITICAL: Verify receivePort is not null
-      if (NotificationsListener.receivePort == null) {
-        debugPrint('❌ ERROR: receivePort is NULL! Cannot register listener.');
-        _isListening = false;
-        return;
-      }
-
-      debugPrint('✅ receivePort disponible, registrando callback...');
-      NotificationsListener.receivePort!.listen(
-        (evt) {
-          debugPrint('📨 EVENTO RECIBIDO DEL PUERTO');
-          _onNotificationReceived(evt);
-        },
-        onError: (error) {
-          debugPrint('❌ ERROR EN LISTENER: $error');
-        },
-        onDone: () {
-          debugPrint('⚠️ LISTENER CERRADO');
-        },
-      );
-      debugPrint('✅ Listener registrado correctamente');
+      const AndroidInitializationSettings initializationSettingsAndroid =
+          AndroidInitializationSettings('@mipmap/launcher_icon');
+      const InitializationSettings initializationSettings =
+          InitializationSettings(android: initializationSettingsAndroid);
+      await _localNotifications.initialize(initializationSettings);
     } catch (e) {
-      debugPrint('❌ Error iniciando Bridge Mode: $e');
-      _isListening = false;
+      debugPrint('⚠️ Error inicializando notificaciones locales: $e');
+    }
+
+    // 3. Inicializar el Listener (Registro de callback)
+    try {
+      debugPrint('🔌 Registrando callback nativo del listener...');
+      await NotificationsListener.initialize(
+        callbackHandle: onNotificationBackground,
+      );
+    } catch (e) {
+      debugPrint('⚠️ Error en inicialización del listener: $e');
     }
   }
 
-  /// Verificar si tiene permisos de notificación (Listener)
   static Future<bool> get hasPermission async {
     try {
       return await NotificationsListener.hasPermission ?? false;
     } catch (e) {
+      debugPrint('❌ Error verificando permisos: $e');
       return false;
     }
   }
 
-  /// Abrir configuración de notificaciones
   static Future<void> openSettings() async {
     try {
       await NotificationsListener.openPermissionSettings();
     } catch (e) {
-      debugPrint('Error abriendo settings: $e');
+      debugPrint('❌ Error abriendo configuración: $e');
     }
   }
 
-  /// Detener servicio
   static Future<void> stopListening() async {
     try {
       await NotificationsListener.stopService();
       _isListening = false;
-      debugPrint('⏹️ Bridge Mode Detenido');
+      debugPrint('⏹️ Servicio detenido');
     } catch (e) {
       debugPrint('❌ Error deteniendo servicio: $e');
     }
   }
 
-  /// Callback cuando llega una notificación
-  static Future<void> _onNotificationReceived(NotificationEvent? evt) async {
-    debugPrint('🔥 NOTIFICATION CALLBACK TRIGGERED!');
-    debugPrint('   Package: ${evt?.packageName}');
-    debugPrint('   Current User: ${_currentUser?.id}');
-
-    if (evt == null || _currentUser == null) {
-      debugPrint(
-        '❌ CALLBACK ABORTED: evt=${evt != null}, user=${_currentUser != null}',
-      );
+  static Future<void> startListening({bool showDialog = false}) async {
+    if (_isListening) {
+      debugPrint('ℹ️ El sistema ya está escuchando.');
       return;
     }
-
-    // 🛑 PRIVACY FILTER: Strictly limit processing to Yape package
-    // OPTIMIZED: Strict filtering.
-    final packageName = evt.packageName;
-    if (packageName != 'com.bcp.innovacxion.yapeapp') {
-      debugPrint('⏭️ SKIPPED: Not Yape package ($packageName)');
-      return;
-    }
-
-    final title = evt.title ?? '';
-    final body = evt.text ?? '';
-    final uniqueId = evt.uniqueId ?? evt.createAt.toString();
-
-    // DEBUG: Log Yape notifications for troubleshooting
-    debugPrint('🔔 YAPE NOTIFICATION RECEIVED:');
-    debugPrint('   Title: $title');
-    debugPrint('   Body: $body');
-
-    // Parsear en ISOLATE para no bloquear UI
-    final parseResult = await compute(
-      _parseNotificationInIsolate,
-      _ParseData(title, body, uniqueId),
-    );
-
-    if (parseResult != null) {
-      debugPrint('✅ PAYMENT PARSED:');
-      debugPrint('   Pagador: ${parseResult['nombrePagador']}');
-      debugPrint('   Monto: S/ ${parseResult['monto']}');
-      debugPrint('   Código: ${parseResult['codigoSeguridad']}');
-      await _processPaymentBridge(parseResult);
-    } else {
-      debugPrint('❌ PAYMENT PARSING FAILED - notification ignored');
-    }
-  }
-
-  // Helper class for compute
-  static Map<String, dynamic>? _parseNotificationInIsolate(_ParseData data) {
-    return _parsePaymentNotification(data.title, data.body, data.uniqueId);
-  }
-
-  // Cache para evitar duplicados (Android a veces envía el evento múltiple veces)
-  static final Set<String> _processedIds = {};
-
-  static Map<String, dynamic>? _parsePaymentNotification(
-    String title,
-    String body,
-    String uniqueId, // ID único de la notificación del sistema
-  ) {
-    // 1. Evitar Loop de Notificaciones del Sistema (Loop infinito si nos leemos a nosotros mismos)
-    // El listener ya filtra por package name (Yape), así que esto es redundante pero seguro.
 
     try {
-      // Regex para Yape: busca "te envió S/ X.XX"
-      // Formato según screenshot: "Delsy Vas* te envió un pago por S/ 1. El cód. de seguridad es: 837"
+      debugPrint('🚀 Iniciando secuencia de monitoreo...');
 
-      // 1. Extraer Monto
-      final RegExp regexMonto = RegExp(r'S/\s?(\d+(?:\.\d{1,2})?)');
-      final matchMonto = regexMonto.firstMatch(body);
+      // 1. Verificar permisos
+      if (!await hasPermission) {
+        debugPrint('⚠️ Sin permisos de Listener.');
+        if (showDialog) await openSettings();
+        return;
+      }
 
-      // 2. Extraer Código (Buscamos "cód. de seguridad es: XXX")
-      // Aceptamos variaciones leves en "cód." por si acaso
-      final RegExp regexCode = RegExp(r'cód\.? de seguridad es:\s*(\d+)');
-      final matchCode = regexCode.firstMatch(body);
+      // 2. MOSTRAR NOTIFICACIÓN PERSISTENTE (MANUAL)
+      debugPrint('🔔 Mostrando notificación persistente manual...');
+      await _localNotifications.show(
+        999,
+        "Feelin Pay",
+        "Servicio de monitoreo activo",
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'payment_monitors',
+            'Monitoreo de Pagos',
+            channelDescription: 'Mantiene el servicio activo en segundo plano',
+            importance: Importance.max,
+            priority: Priority.high,
+            ongoing: true,
+            autoCancel: false,
+            showWhen: true,
+            icon: '@mipmap/launcher_icon',
+          ),
+        ),
+      );
 
-      if (matchMonto != null) {
-        final montoStr = matchMonto.group(1);
+      // 3. Iniciar el servicio NATIVO (Con todos los campos para evitar JSONException)
+      debugPrint('🚀 Llamando a startService background mode...');
+      await NotificationsListener.startService(
+        title: "Feelin Pay",
+        description: "Monitoreo iniciado",
+        subTitle: "Esperando pagos...", // REQUERIDO por el plugin
+        showWhen: true, // REQUERIDO por el plugin
+        foreground:
+            false, // EVITA JSONException pero requiere que todos los campos existan
+      );
 
-        // 3. Extraer Nombre (Todo antes de " te envió")
-        final nombreEndIndex = body.indexOf(' te envió');
-        final nombre = nombreEndIndex > 0
-            ? body.substring(0, nombreEndIndex).trim()
-            : 'Desconocido';
+      // 3.5 Re-vincular manejador por si acaso
+      await NotificationsListener.initialize(
+        callbackHandle: onNotificationBackground,
+      );
 
-        // Determinar Código Final y Medio de Pago
-        String codigo = '';
-        String medioDePago = '';
+      // Esperar a que Android estabilice el servicio y el puerto
+      await Future.delayed(const Duration(seconds: 2));
 
-        if (matchCode != null) {
-          // YAPE → YAPE (tiene código de seguridad explícito)
-          codigo = matchCode.group(1)!;
-          medioDePago = 'Yape';
-        } else {
-          // PLIN → YAPE o auto-transferencia (no tiene código explícito)
-          // Fallback mejorado: buscar cualquier secuencia de 3-6 dígitos
-          final RegExp regexFallback = RegExp(r'\b\d{3,6}\b');
-          final allMatches = regexFallback.allMatches(body).toList();
+      // 4. Conectar puerto de comunicación
+      debugPrint('📡 Conectando puerto de datos...');
+      int retries = 0;
+      while (NotificationsListener.receivePort == null && retries < 15) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        retries++;
+      }
 
-          if (allMatches.isNotEmpty) {
-            // Tomar el último match (usualmente el código está al final)
-            codigo = allMatches.last.group(0)!;
-            medioDePago =
-                'Plin'; // Asumimos Plin si hay dígitos pero no formato Yape
-          } else {
-            // Si no hay código, generar uno basado en timestamp + nombre
-            final timestamp = DateTime.now().millisecondsSinceEpoch;
-            final nameHash = nombre.hashCode.abs();
-            codigo =
-                'PLIN-${(timestamp % 100000).toString().padLeft(5, '0')}-${(nameHash % 1000).toString().padLeft(3, '0')}';
-            medioDePago = 'Plin';
-            debugPrint('⚠️ Pago Plin→Yape detectado, código generado: $codigo');
-          }
-        }
+      if (NotificationsListener.receivePort == null) {
+        debugPrint('❌ Error: Puerto de comunicación no disponible.');
+        return;
+      }
 
-        // --- VALIDACIÓN DE DUPLICADOS (REGLA USUARIO) ---
-        // "El mismo nombre no puede repetir el código de seguridad el mismo día"
-        final now = DateTime.now();
-        final todayStr = "${now.year}-${now.month}-${now.day}";
-        final dedupeKey = "$todayStr|$nombre|$codigo";
+      // 5. Suscribirse al flujo
+      debugPrint('✅ Puerto conectado. Escuchando...');
+      NotificationsListener.receivePort!.listen((evt) {
+        debugPrint('📨 EVENTO RECIBIDO EN PUERTO: ${evt.packageName}');
+        _onNotificationReceived(evt);
+      }, onError: (e) => debugPrint('❌ Error en el flujo de datos: $e'));
 
-        if (_processedIds.contains(dedupeKey)) {
-          debugPrint('🚫 Pago duplicado hoy detectado: $nombre - $codigo');
-          return null;
-        }
-        _processedIds.add(dedupeKey);
-        // Limpieza simple: si crece mucho, reiniciamos (un día no debería tener millones de tx locales)
-        if (_processedIds.length > 500) _processedIds.clear();
+      _isListening = true;
+    } catch (e) {
+      debugPrint('❌ Error activando el monitoreo: $e');
+    }
+  }
 
-        return {
-          'nombrePagador': nombre,
-          'monto': double.tryParse(montoStr ?? '0') ?? 0.0,
-          'codigoSeguridad': codigo,
-          'medioDePago': medioDePago, // 'Yape' o 'Plin'
-          'originalText': '$title $body',
-        };
+  static Future<void> _onNotificationReceived(NotificationEvent? evt) async {
+    try {
+      if (evt == null) return;
+      handleExternalEvent(evt);
+    } catch (e) {
+      debugPrint('❌ Error en el manejador de entrada: $e');
+    }
+  }
+
+  /// Punto de entrada unificado para UI y Isolate de Background
+  static Future<void> handleExternalEvent(NotificationEvent evt) async {
+    try {
+      final isBackground = Isolate.current.debugName != 'main';
+
+      // LOG CRÍTICO PARA DEBUG: Ver qué llega realmente (USAR print para background)
+      // ignore: avoid_print
+      final logger = isBackground ? (Object? o) => print(o) : debugPrint;
+
+      logger('----------------------------------------');
+      logger('🔥 EVENTO DETECTADO:');
+      logger('   Paquete: ${evt.packageName}');
+      logger('   Título: ${evt.title}');
+      logger('   Texto: ${evt.text}');
+      logger('----------------------------------------');
+
+      // Procesar solo si es Yape (Soportamos varias versiones del paquete)
+      final yapePackages = [
+        'com.bcp.innovacxion.yapeapp',
+        'com.bcp.innovabcp.yape',
+      ];
+
+      // El usuario reporta que Yape usa título "Confirmación de Pago"
+      final isYapePackage = yapePackages.contains(evt.packageName);
+      final isYapeTitle = evt.title?.contains('Pago') ?? false;
+
+      if (isYapePackage || isYapeTitle) {
+        final uniqueId =
+            evt.uniqueId ?? 'YAPE-${DateTime.now().millisecondsSinceEpoch}';
+
+        await processNotification(
+          packageName: evt.packageName,
+          title: evt.title ?? '',
+          body: evt.text ?? '',
+          uniqueId: uniqueId,
+        );
       }
     } catch (e) {
-      debugPrint('⚠️ Error parseando notificación: $e');
+      // ignore: avoid_print
+      print('❌ Error crítico en handleExternalEvent: $e');
     }
-    return null;
+  }
+
+  /// Lógica central de procesamiento
+  static Future<void> processNotification({
+    required String? packageName,
+    required String title,
+    required String body,
+    required String uniqueId,
+  }) async {
+    try {
+      final isBackground = Isolate.current.debugName != 'main';
+      // ignore: avoid_print
+      final logger = isBackground ? (Object? o) => print(o) : debugPrint;
+
+      logger('⚡ PROCESANDO PAGO DE YAPE...');
+
+      final service = _apiService;
+      final user = _currentUser;
+
+      // 1. RECONSTRUCCIÓN DE DEPENDENCIAS (Solo si estamos en isolate de fondo)
+      if (service == null || user == null) {
+        logger('🛠️ Reinstalando dependencias en isolate de fondo...');
+        final newService = ApiService();
+        await newService.initialize();
+        _apiService = newService;
+
+        final prefs = await SharedPreferences.getInstance();
+        final savedUserId = prefs.getString('bg_user_id');
+        final savedToken = prefs.getString('bg_auth_token');
+
+        if (savedUserId != null) {
+          final newUser = UserModel(
+            id: savedUserId,
+            rolId: 'bg_listener',
+            rol: 'super_admin',
+            nombre: 'Servicio de Fondo',
+            email: 'service@feelin-pay.com',
+            activo: true,
+            enPeriodoPrueba: false,
+            diasPruebaRestantes: 0,
+            emailVerificado: true,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
+          _currentUser = newUser;
+
+          if (savedToken != null) {
+            await newService.setAuthToken(savedToken);
+          }
+          logger('✅ Datos de sesión restaurados en isolate.');
+        }
+      }
+
+      if (_currentUser == null || _apiService == null) {
+        logger(
+          '❌ Error: Usuario o Servicio no disponible para procesar el pago.',
+        );
+        return;
+      }
+
+      // 2. PARSEO DE NOTIFICACIÓN
+      final paymentData = _parseYapeNotification(title, body, uniqueId);
+
+      if (paymentData != null) {
+        final codePart = (paymentData['codigoSeguridad'] as String).isNotEmpty
+            ? " | Código: ${paymentData['codigoSeguridad']}"
+            : "";
+        logger(
+          '✅ Datos extraídos: ${paymentData['nombrePagador']} - S/ ${paymentData['monto']} (${paymentData['medioDePago']})$codePart',
+        );
+        await _processPaymentBridge(paymentData);
+      } else {
+        logger('❌ No se pudieron extraer datos del cuerpo de la notificación.');
+        logger('   Cuerpo recibido: "$body"');
+      }
+    } catch (e) {
+      // ignore: avoid_print
+      print('❌ Error crítico en processNotification: $e');
+    }
+  }
+
+  /// Método de parseo (Sincrónico para evitar overhead de isolate extra)
+  static Map<String, dynamic>? _parseYapeNotification(
+    String title,
+    String body,
+    String uniqueId,
+  ) {
+    // 1. EXTRAER MONTO (Común a ambos)
+    final RegExp montoRegex = RegExp(r'S/\s*([\d,]+\.?\d*)');
+    final montoMatch = montoRegex.firstMatch(body);
+    if (montoMatch == null) return null;
+
+    final montoStr = montoMatch.group(1)?.replaceAll(',', '') ?? '0';
+    final monto = double.tryParse(montoStr) ?? 0.0;
+    if (monto <= 0) return null;
+
+    // 2. EXTRAER CÓDIGO DE SEGURIDAD (Si existe)
+    // Buscamos: "El cód. de seguridad es: 837" o "código: 123456"
+    final RegExp codeRegex = RegExp(
+      r'có[d.]\.? de seguridad es:\s*(\d+)',
+      caseSensitive: false,
+    );
+    final codeMatch = codeRegex.firstMatch(body);
+    final realCode = codeMatch?.group(1);
+
+    // 3. EXTRAER NOMBRE DEL PAGADOR
+    // El nombre suele estar antes de "te envió un pago" o "te envió S/"
+    // Puede venir con el prefijo "Yape! " o sin él (caso Yape-Yape con código)
+    final RegExp nameRegex = RegExp(
+      r'(?:Yape!\s+)?(.+?)\s+te\s+envió',
+      caseSensitive: false,
+    );
+    final nameMatch = nameRegex.firstMatch(body);
+    final nombrePagador = nameMatch?.group(1)?.trim() ?? 'Remitente';
+
+    final medioDePago = realCode != null ? 'yape' : 'plin';
+
+    return {
+      'nombrePagador': nombrePagador,
+      'monto': monto,
+      'codigoSeguridad': realCode ?? '', // Solo enviamos si existe (Yape-Yape)
+      'uniqueId':
+          uniqueId, // Mantenemos el ID de evento para trazabilidad interna
+      'medioDePago': medioDePago,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
   }
 
   static Future<void> _processPaymentBridge(
     Map<String, dynamic> paymentData,
   ) async {
-    if (_currentUser == null) return;
-
     try {
-      debugPrint('📤 SENDING TO BACKEND:');
-      debugPrint('   Endpoint: /payments/yape');
-      debugPrint('   Usuario ID: ${_currentUser!.id}');
-      debugPrint('   Pagador: ${paymentData['nombrePagador']}');
-      debugPrint('   Monto: ${paymentData['monto']}');
-      debugPrint('   Código: ${paymentData['codigoSeguridad']}');
+      final isBackground = Isolate.current.debugName != 'main';
+      // ignore: avoid_print
+      final logger = isBackground ? (Object? o) => print(o) : debugPrint;
 
-      // 1. Enviar al Backend (Log en Sheets + Notificación Dashboard)
-      // Enviamos el pago INMEDIATAMENTE para que el backend decida destinatarios
-      final response = await _apiService.post<Map<String, dynamic>>(
-        '/payments/yape', // Endpoint correcto según paymentRoutes.ts
+      if (_currentUser == null) {
+        logger('❌ Error: No hay usuario autenticado para registrar el pago.');
+        return;
+      }
+
+      logger('🌉 Enviando pago al servidor para procesar SMS...');
+
+      final response = await _apiService!.post<Map<String, dynamic>>(
+        '/payments/yape',
         data: {
           'usuarioId': _currentUser!.id,
           'nombrePagador': paymentData['nombrePagador'],
           'monto': paymentData['monto'],
           'codigoSeguridad': paymentData['codigoSeguridad'],
-          'medioDePago': paymentData['medioDePago'], // 'Yape' o 'Plin'
+          'medioDePago': paymentData['medioDePago'], // 'yape' o 'plin'
+          'notifUniqueId': paymentData['uniqueId'],
         },
       );
 
-      debugPrint('📥 BACKEND RESPONSE:');
-      debugPrint('   Success: ${response.isSuccess}');
-      debugPrint('   Message: ${response.message}');
-
-      // 2. Revisar si hay que enviar SMS (Respuesta del backend)
       if (response.isSuccess && response.data != null) {
-        final data = response.data!;
-        debugPrint('   SMS Targets: ${data['smsTargets']}');
+        logger('✅ Pago registrado con éxito.');
 
-        if (data['smsTargets'] != null) {
-          final List<dynamic> targets = data['smsTargets'];
+        final smsTargets = response.data!['smsTargets'] as List<dynamic>?;
 
-          if (targets.isNotEmpty) {
-            // REQUERIMIENTO: "SMS tal cual llega la notificación como una copia"
-            // Usamos el texto original capturado
-            final message =
-                paymentData['originalText'] ??
-                "Pago recibido: ${paymentData['monto']}";
+        if (smsTargets != null && smsTargets.isNotEmpty) {
+          final defaultMessage =
+              "Feelin Pay: Pago recibido de ${paymentData['nombrePagador']} por S/ ${paymentData['monto']}.";
 
-            await _sendSMSBatch(targets.cast<String>(), message);
+          logger(
+            '📱 Preparando envío de SMS a ${smsTargets.length} destinos...',
+          );
+
+          for (var target in smsTargets) {
+            String? phone;
+            String? targetMsg;
+
+            if (target is String) {
+              phone = target;
+              targetMsg = defaultMessage;
+            } else if (target is Map) {
+              phone = target['telefono']?.toString();
+              targetMsg = target['mensaje']?.toString() ?? defaultMessage;
+            }
+
+            if (phone != null && phone.isNotEmpty) {
+              logger('   -> Iniciando envío a $phone...');
+              await _sendSMSBatch([phone], targetMsg ?? defaultMessage);
+              logger('   ✅ Envío finalizado para $phone.');
+              // Pausa de 2 segundos para asegurar entrega secuencial del operador (evita bloqueos de red)
+              await Future.delayed(const Duration(seconds: 2));
+            }
           }
+        } else {
+          logger('ℹ️ No hay empleados configurados para recibir SMS.');
         }
       } else {
-        debugPrint('❌ BACKEND ERROR: ${response.message}');
+        logger('⚠️ El servidor rechazó el registro: ${response.message}');
       }
     } catch (e) {
-      debugPrint('❌ Error procesando pago en backend: $e');
+      // ignore: avoid_print
+      print('❌ Error crítico en el puente de procesamiento: $e');
     }
   }
 
   static Future<void> _sendSMSBatch(List<String> phones, String message) async {
-    for (final phone in phones) {
+    final isBackground = Isolate.current.debugName != 'main';
+    // ignore: avoid_print
+    final logger = isBackground ? (Object? o) => print(o) : debugPrint;
+
+    for (String phone in phones) {
       try {
-        debugPrint('📨 Enviando SMS a $phone...');
-        // Enviar en background
+        logger('   -> Enviando a $phone...');
         await _telephony.sendSms(to: phone, message: message);
+        logger('   ✅ SMS enviado.');
       } catch (e) {
-        debugPrint('❌ Error enviando SMS a $phone: $e');
+        logger('   ❌ Error enviando SMS a $phone: $e');
       }
     }
   }
-}
 
-class _ParseData {
-  final String title;
-  final String body;
-  final String uniqueId;
+  /// Método de simulación para pruebas internas
+  static Future<void> simulateTestYape() async {
+    debugPrint('🧪 SIMULANDO NOTIFICACIÓN PLIN (SIN CÓDIGO)...');
+    await _onNotificationReceived(
+      NotificationEvent(
+        packageName: 'com.bcp.innovacxion.yapeapp',
+        title: 'Confirmación de Pago',
+        text: 'Yape! DAVID TEST te envió un pago por S/ 1.50',
+        createAt: DateTime.now(),
+      ),
+    );
 
-  _ParseData(this.title, this.body, this.uniqueId);
+    await Future.delayed(const Duration(seconds: 3));
+
+    debugPrint('🧪 SIMULANDO NOTIFICACIÓN YAPE-YAPE (CON CÓDIGO)...');
+    await _onNotificationReceived(
+      NotificationEvent(
+        packageName: 'com.bcp.innovacxion.yapeapp',
+        title: 'Confirmación de Pago',
+        text:
+            'David Test* te envió un pago por S/ 2.00. El cód. de seguridad es: 999',
+        createAt: DateTime.now(),
+      ),
+    );
+  }
 }

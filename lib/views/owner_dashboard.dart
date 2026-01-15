@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import '../core/design/design_system.dart';
 import '../controllers/auth_controller.dart';
 import '../widgets/three_dots_menu_widget.dart';
@@ -29,45 +28,41 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
   void initState() {
     super.initState();
     _loadStatistics();
-
-    // PERFORMANCE FIX: Start services AFTER the UI is rendered.
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      _startBackgroundServices();
-
-      // Check permissions for returning users
-      if (await Permission.notification.isDenied ||
-          await Permission.sms.isDenied) {
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, '/permissions');
-          return;
-        }
-      }
-    });
+    // CRITICAL: Start services asynchronously without blocking UI thread
+    _startBackgroundServices();
   }
 
-  Future<void> _startBackgroundServices() async {
-    try {
-      final authController = Provider.of<AuthController>(
-        context,
-        listen: false,
-      );
-      final user = authController.currentUser;
+  void _startBackgroundServices() {
+    // Capture context before async gap
+    final currentContext = context;
 
-      if (user != null) {
-        debugPrint("🚀 OwnerDashboard: Starting background services...");
-        await PaymentNotificationService.init(user);
-
-        // Iniciar listener de notificaciones automáticamente
-        debugPrint(
-          "🎯 OwnerDashboard: Starting payment notification listener...",
+    // Run in background without blocking initState
+    Future.microtask(() async {
+      try {
+        final authController = Provider.of<AuthController>(
+          // ignore: use_build_context_synchronously
+          currentContext,
+          listen: false,
         );
-        await PaymentNotificationService.startListening(showDialog: true);
+        final user = authController.currentUser;
 
-        await SMSService.procesarSMSPendientes();
+        if (user != null) {
+          debugPrint("🚀 OwnerDashboard: Starting background services...");
+          await PaymentNotificationService.init(user);
+
+          // Iniciar listener de notificaciones automáticamente
+          debugPrint(
+            "🎯 OwnerDashboard: Starting payment notification listener...",
+          );
+          await PaymentNotificationService.startListening(showDialog: false);
+
+          await SMSService.procesarSMSPendientes();
+        }
+      } catch (e) {
+        // Silently fail or log if needed, but don't crash dashboard
+        debugPrint("❌ Error starting background services: $e");
       }
-    } catch (e) {
-      // Siltently fail or log if needed, but don't crash dashboard
-    }
+    });
   }
 
   // OPTIMIZATION: Removed _initializeAnimations and dispose() as they're no longer needed
