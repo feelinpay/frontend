@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // NEW
+import 'google_drive_service.dart';
 import '../models/user_model.dart';
 import '../models/api_response.dart' as api_models;
 import 'api_service.dart';
@@ -13,10 +14,9 @@ class AuthService {
 
   final ApiService _apiService = ApiService();
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    // Client ID web para obtener el idToken para el backend
-    // Este debe coincidir con el client_id de tipo 3 en google-services.json
     serverClientId:
-        '136817731846-smurvc37qgut87sco3k4lv7ggfdi4fcu.apps.googleusercontent.com',
+        '607923304959-39h6usdv60jhb446qmrsb05v74t335nc.apps.googleusercontent.com',
+    scopes: ['email', 'https://www.googleapis.com/auth/drive.file'],
   );
 
   // ========================================
@@ -84,6 +84,8 @@ class AuthService {
 
   /// Iniciar sesión con Google
   Future<api_models.ApiResponse<UserModel>> signInWithGoogle() async {
+    debugPrint('🔐 [AUTH SERVICE] Iniciando Google Sign In...');
+
     try {
       // 0. Forzar cierre de sesión previo para permitir selección de cuenta (Debug)
       await _googleSignIn.signOut();
@@ -112,7 +114,17 @@ class AuthService {
         );
       }
 
-      // 3. Enviar token al backend para autenticación
+      // 3. Setup de carpeta de Drive (Automático y Escalable)
+      String? driveFolderId;
+      try {
+        final driveService = GoogleDriveService(_googleSignIn);
+        driveFolderId = await driveService.setupReportFolder();
+        debugPrint('✅ [AUTH SERVICE] Folder ID automático: $driveFolderId');
+      } catch (e) {
+        debugPrint('⚠️ [AUTH SERVICE] Error configurando Drive: $e');
+      }
+
+      // 4. Enviar token al backend para autenticación
       // Enviamos múltiples variantes del nombre del campo y datos extra
       final response = await _apiService.post<Map<String, dynamic>>(
         '/auth/google',
@@ -125,11 +137,14 @@ class AuthService {
           'accessToken': accessToken,
           'access_token': accessToken,
 
-          // Información del perfil (por si el backend la necesita)
+          // Información del perfil
           'email': account.email,
           'name': account.displayName,
           'photoUrl': account.photoUrl,
           'id': account.id,
+
+          // Carpeta de Drive automática
+          'googleDriveFolderId': driveFolderId,
         },
         requireAuth: false,
       );
@@ -151,6 +166,22 @@ class AuthService {
           if (userId != null) {
             await _saveAuthDataToPrefs(token, userId);
           }
+        }
+
+        // CACHEAR TOKEN DE GOOGLE EXPLÍCITAMENTE
+        try {
+          final auth = await account
+              .authentication; // Usamos 'account' que ya tenemos definido arriba
+          final gToken = auth.accessToken;
+          if (gToken != null) {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('bg_google_token', gToken);
+            debugPrint(
+              '✅ [AUTH SERVICE] Token de Google cacheado exitosamente tras login.',
+            );
+          }
+        } catch (e) {
+          debugPrint('⚠️ Error cacheando token post-login: $e');
         }
 
         return api_models.ApiResponse<UserModel>(
@@ -536,6 +567,40 @@ class AuthService {
     } catch (e) {
       debugPrint('Error saving auth data to prefs: $e');
     }
+  }
+
+  /// Recuperar el Access Token de Google actual
+  /// Nota: Si ha expirado, google_sign_in intentará refrescarlo internamente al pedir autenticación
+  /// Recuperar el Access Token de Google actual
+  /// Nota: Si ha expirado, google_sign_in intentará refrescarlo internamente al pedir autenticación
+  Future<String?> getGoogleAccessToken() async {
+    try {
+      // Si no hay usuario logueado en la instancia, intentamos signInSilently
+      if (_googleSignIn.currentUser == null) {
+        await _googleSignIn.signInSilently();
+      }
+
+      final user = _googleSignIn.currentUser;
+      if (user != null) {
+        final auth = await user.authentication;
+        final token = auth.accessToken;
+
+        // Cachear token para uso en background / procesos aislados
+        if (token != null) {
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('bg_google_token', token);
+          } catch (e) {
+            debugPrint('⚠️ Error cacheando token de Google: $e');
+          }
+        }
+
+        return token;
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error obteniendo Google Access Token: $e');
+    }
+    return null;
   }
 }
 

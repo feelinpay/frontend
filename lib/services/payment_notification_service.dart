@@ -1,9 +1,9 @@
 import 'dart:isolate';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_notification_listener_plus/flutter_notification_listener_plus.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:another_telephony/telephony.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
@@ -43,9 +43,8 @@ class PaymentNotificationService {
     }
     debugPrint('💾 Datos de sesión guardados para procesos de fondo.');
 
-    // 1. Permisos básicos
-    await Permission.sms.request();
-    await Permission.notification.request();
+    // NOTA: Los permisos se solicitan en la UI (AndroidPermissionsScreen)
+    // No los solicitamos aquí para evitar conflictos o doble redirección.
 
     // 2. Inicializar notificaciones locales
     try {
@@ -97,6 +96,8 @@ class PaymentNotificationService {
   }
 
   static Future<void> startListening({bool showDialog = false}) async {
+    debugPrint('🔔 [START] startListening called, showDialog=$showDialog');
+
     if (_isListening) {
       debugPrint('ℹ️ El sistema ya está escuchando.');
       return;
@@ -106,43 +107,34 @@ class PaymentNotificationService {
       debugPrint('🚀 Iniciando secuencia de monitoreo...');
 
       // 1. Verificar permisos
-      if (!await hasPermission) {
+      final hasPerm = await hasPermission;
+      debugPrint('🔐 Verificación de permisos: $hasPerm');
+
+      if (!hasPerm) {
         debugPrint('⚠️ Sin permisos de Listener.');
         if (showDialog) await openSettings();
         return;
       }
 
-      // 2. MOSTRAR NOTIFICACIÓN PERSISTENTE (MANUAL)
-      debugPrint('🔔 Mostrando notificación persistente manual...');
-      await _localNotifications.show(
-        999,
-        "Feelin Pay",
-        "Servicio de monitoreo activo",
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'payment_monitors',
-            'Monitoreo de Pagos',
-            channelDescription: 'Mantiene el servicio activo en segundo plano',
-            importance: Importance.max,
-            priority: Priority.high,
-            ongoing: true,
-            autoCancel: false,
-            showWhen: true,
-            icon: '@mipmap/launcher_icon',
-          ),
-        ),
-      );
-
-      // 3. Iniciar el servicio NATIVO (Con todos los campos para evitar JSONException)
-      debugPrint('🚀 Llamando a startService background mode...');
+      // 2. Iniciar el servicio NATIVO con notificación persistente
+      debugPrint('🚀 Llamando a startService con notificación persistente...');
       await NotificationsListener.startService(
         title: "Feelin Pay",
-        description: "Monitoreo iniciado",
-        subTitle: "Esperando pagos...", // REQUERIDO por el plugin
-        showWhen: true, // REQUERIDO por el plugin
-        foreground:
-            false, // EVITA JSONException pero requiere que todos los campos existan
+        description: "Escuchando notificaciones de pago",
+        subTitle: "Servicio activo",
+        showWhen: true,
+        foreground: true, // CRÍTICO: Muestra la notificación persistente
       );
+      debugPrint('✅ startService completado exitosamente');
+
+      // Start native persistent notification service
+      try {
+        const platform = MethodChannel('com.example.feelin_pay/notification');
+        await platform.invokeMethod('startPersistentNotification');
+        debugPrint('✅ Native persistent notification started');
+      } catch (e) {
+        debugPrint('⚠️ Failed to start native notification: $e');
+      }
 
       // 3.5 Re-vincular manejador por si acaso
       await NotificationsListener.initialize(
@@ -173,8 +165,12 @@ class PaymentNotificationService {
       }, onError: (e) => debugPrint('❌ Error en el flujo de datos: $e'));
 
       _isListening = true;
+      debugPrint(
+        '🎉 [SUCCESS] Servicio de notificaciones iniciado correctamente',
+      );
     } catch (e) {
-      debugPrint('❌ Error activando el monitoreo: $e');
+      debugPrint('❌ [ERROR] Error activando el monitoreo: $e');
+      debugPrint('❌ Stack trace: ${StackTrace.current}');
     }
   }
 
@@ -214,8 +210,9 @@ class PaymentNotificationService {
       final isYapeTitle = evt.title?.contains('Pago') ?? false;
 
       if (isYapePackage || isYapeTitle) {
-        final uniqueId =
-            evt.uniqueId ?? 'YAPE-${DateTime.now().millisecondsSinceEpoch}';
+        final uniqueId = (evt.uniqueId != null)
+            ? '${evt.uniqueId}-${DateTime.now().millisecondsSinceEpoch}'
+            : 'YAPE-${DateTime.now().millisecondsSinceEpoch}';
 
         await processNotification(
           packageName: evt.packageName,

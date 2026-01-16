@@ -7,7 +7,8 @@ class EmployeeModel {
   final bool activo;
   final DateTime createdAt;
   final DateTime updatedAt;
-  final bool? notificacionesActivas; // From ConfiguracionNotificacion
+  final bool? notificacionesActivas;
+  final Map<String, dynamic>? horarioLaboral; // Nuevo campo JSON
 
   const EmployeeModel({
     required this.id,
@@ -18,6 +19,7 @@ class EmployeeModel {
     required this.createdAt,
     required this.updatedAt,
     this.notificacionesActivas,
+    this.horarioLaboral,
   });
 
   /// Crear desde JSON
@@ -35,6 +37,9 @@ class EmployeeModel {
         json['updatedAt'] ?? DateTime.now().toIso8601String(),
       ),
       notificacionesActivas: json['activo'] ?? false,
+      horarioLaboral: json['horarioLaboral'] is Map<String, dynamic>
+          ? json['horarioLaboral'] as Map<String, dynamic>
+          : null,
     );
   }
 
@@ -51,6 +56,7 @@ class EmployeeModel {
       'configuracionNotificacion': notificacionesActivas != null
           ? {'notificacionesActivas': notificacionesActivas}
           : null,
+      'horarioLaboral': horarioLaboral,
     };
   }
 
@@ -64,6 +70,7 @@ class EmployeeModel {
     DateTime? createdAt,
     DateTime? updatedAt,
     bool? notificacionesActivas,
+    Map<String, dynamic>? horarioLaboral,
   }) {
     return EmployeeModel(
       id: id ?? this.id,
@@ -75,6 +82,7 @@ class EmployeeModel {
       updatedAt: updatedAt ?? this.updatedAt,
       notificacionesActivas:
           notificacionesActivas ?? this.notificacionesActivas,
+      horarioLaboral: horarioLaboral ?? this.horarioLaboral,
     );
   }
 

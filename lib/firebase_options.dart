@@ -41,48 +41,48 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyC4F1rCfnO-3-tT4YloHVAbqGkd7EtgxGk',
-    appId: '1:136817731846:web:db078d33161d25478ed687',
-    messagingSenderId: '136817731846',
-    projectId: 'feelin-pay-c15ac',
-    authDomain: 'feelin-pay-c15ac.firebaseapp.com',
-    storageBucket: 'feelin-pay-c15ac.firebasestorage.app',
-    measurementId: 'G-2CZJNQ1GPD',
+    apiKey: 'AIzaSyCJpAGmHaFkAiPp7_A3zuZEUq8fXJ5kyDM',
+    appId: '1:607923304959:web:3ca54d4f1195c44f488fca',
+    messagingSenderId: '607923304959',
+    projectId: 'feelin-pay-a345a',
+    authDomain: 'feelin-pay-a345a.firebaseapp.com',
+    storageBucket: 'feelin-pay-a345a.firebasestorage.app',
+    measurementId: 'G-34LQ22CS1F',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDSJf9zUqcoehVa-oz4-Zp0-PCfURfrobQ',
-    appId: '1:136817731846:android:16c2dfd65501c97a8ed687',
-    messagingSenderId: '136817731846',
-    projectId: 'feelin-pay-c15ac',
-    storageBucket: 'feelin-pay-c15ac.firebasestorage.app',
+    apiKey: 'AIzaSyCNQ-1DPxYE2J0Y_RuObg7KEVJ9dMrNHSo',
+    appId: '1:607923304959:android:7cb24de543b51f92488fca',
+    messagingSenderId: '607923304959',
+    projectId: 'feelin-pay-a345a',
+    storageBucket: 'feelin-pay-a345a.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyCaQDumloaVCySMraXYRGlnO-Spsz9DDf4',
-    appId: '1:136817731846:ios:02ec30ca8aa921548ed687',
-    messagingSenderId: '136817731846',
-    projectId: 'feelin-pay-c15ac',
-    storageBucket: 'feelin-pay-c15ac.firebasestorage.app',
+    apiKey: 'AIzaSyDg5gR7bbOtp3Pv4lmfqVA8IoKJi5kVabI',
+    appId: '1:607923304959:ios:1f4161a079332f92488fca',
+    messagingSenderId: '607923304959',
+    projectId: 'feelin-pay-a345a',
+    storageBucket: 'feelin-pay-a345a.firebasestorage.app',
     iosBundleId: 'com.example.feelinPay',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyCaQDumloaVCySMraXYRGlnO-Spsz9DDf4',
-    appId: '1:136817731846:ios:02ec30ca8aa921548ed687',
-    messagingSenderId: '136817731846',
-    projectId: 'feelin-pay-c15ac',
-    storageBucket: 'feelin-pay-c15ac.firebasestorage.app',
+    apiKey: 'AIzaSyDg5gR7bbOtp3Pv4lmfqVA8IoKJi5kVabI',
+    appId: '1:607923304959:ios:1f4161a079332f92488fca',
+    messagingSenderId: '607923304959',
+    projectId: 'feelin-pay-a345a',
+    storageBucket: 'feelin-pay-a345a.firebasestorage.app',
     iosBundleId: 'com.example.feelinPay',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyC4F1rCfnO-3-tT4YloHVAbqGkd7EtgxGk',
-    appId: '1:136817731846:web:65db0f3114e515888ed687',
-    messagingSenderId: '136817731846',
-    projectId: 'feelin-pay-c15ac',
-    authDomain: 'feelin-pay-c15ac.firebaseapp.com',
-    storageBucket: 'feelin-pay-c15ac.firebasestorage.app',
-    measurementId: 'G-ND1L7NK92C',
+    apiKey: 'AIzaSyCJpAGmHaFkAiPp7_A3zuZEUq8fXJ5kyDM',
+    appId: '1:607923304959:web:5c54a48bac429876488fca',
+    messagingSenderId: '607923304959',
+    projectId: 'feelin-pay-a345a',
+    authDomain: 'feelin-pay-a345a.firebaseapp.com',
+    storageBucket: 'feelin-pay-a345a.firebasestorage.app',
+    measurementId: 'G-9P2C00RECT',
   );
 }

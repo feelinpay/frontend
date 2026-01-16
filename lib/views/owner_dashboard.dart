@@ -6,8 +6,9 @@ import '../widgets/three_dots_menu_widget.dart';
 import '../widgets/app_header.dart';
 import '../widgets/admin_drawer.dart';
 import '../core/widgets/responsive_widgets.dart';
-import '../services/payment_notification_service.dart';
+import '../services/unified_background_service.dart';
 import '../services/sms_service.dart';
+import '../services/api_service.dart';
 
 class OwnerDashboard extends StatefulWidget {
   const OwnerDashboard({super.key});
@@ -47,20 +48,19 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
         final user = authController.currentUser;
 
         if (user != null) {
-          debugPrint("🚀 OwnerDashboard: Starting background services...");
-          await PaymentNotificationService.init(user);
+          debugPrint("🚀 OwnerDashboard: Iniciando servicio unificado...");
 
-          // Iniciar listener de notificaciones automáticamente
-          debugPrint(
-            "🎯 OwnerDashboard: Starting payment notification listener...",
-          );
-          await PaymentNotificationService.startListening(showDialog: false);
+          // Inicializar y arrancar servicio unificado
+          await UnifiedBackgroundService.initialize(user);
+          await UnifiedBackgroundService.start();
+
+          debugPrint("✅ Servicio unificado iniciado correctamente");
 
           await SMSService.procesarSMSPendientes();
         }
       } catch (e) {
         // Silently fail or log if needed, but don't crash dashboard
-        debugPrint("❌ Error starting background services: $e");
+        debugPrint("❌ Error starting unified service: $e");
       }
     });
   }
@@ -75,7 +75,7 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
 
     try {
       // Por ahora usamos datos mock
-      // OPTIMIZATION: Removed artificial delay for instant loading
+      // OPTIMIZATION: Removed artificial delay for immediate loading
       // await Future.delayed(const Duration(milliseconds: 500));
 
       setState(() {
@@ -92,6 +92,67 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
         _error = 'Error al cargar estadísticas: $e';
         _isLoading = false;
       });
+    }
+  }
+
+  // TEST FUNCTION for Google Sheets
+  Future<void> _simularPagoTest() async {
+    final authController = context.read<AuthController>();
+    final user = authController.currentUser;
+
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error: No usuario autenticado')),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('⏳ Enviando pago de prueba...')),
+    );
+
+    try {
+      final apiService = ApiService();
+      // Using /yape endpoint directly to simulate a notification
+      final response = await apiService.post(
+        '/payments/yape',
+        data: {
+          'usuarioId': user.id,
+          'nombrePagador': 'TEST USER - ${DateTime.now().second}',
+          'monto': 100.0,
+          'codigoSeguridad':
+              'TEST_CODE', // Only needed for Yape but good to have
+          'medioDePago': 'Yape',
+          'testMode': true, // Optional flag if backend wants it
+        },
+      );
+
+      if (response.isSuccess) {
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Éxito: Revisa tu Google Drive!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      } else {
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error Backend: ${response.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Error Local: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -368,6 +429,12 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
               color: const Color(0xFFF59E0B),
               onTap: () =>
                   Navigator.pushNamed(context, '/permissions-management'),
+            ),
+            _buildShortcutCard(
+              title: 'Simular Pago Test',
+              icon: Icons.bug_report,
+              color: DesignSystem.primaryColor,
+              onTap: _simularPagoTest,
             ),
           ],
         ),

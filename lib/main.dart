@@ -21,6 +21,7 @@ import 'controllers/notification_controller.dart';
 import 'controllers/system_controller.dart';
 import 'services/api_service.dart';
 import 'core/design/design_system.dart';
+import 'firebase_options.dart';
 
 // Crear instancias globales de los controladores
 final AuthController _authController = AuthController();
@@ -35,7 +36,9 @@ void main() async {
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
-      await Firebase.initializeApp();
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
 
       try {
         debugPrint("🚀 Starting Feelin Pay Initialization...");

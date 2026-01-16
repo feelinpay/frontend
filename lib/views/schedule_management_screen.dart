@@ -25,9 +25,6 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> {
   // Estructura: 'Lunes': [ { 'id': '...', 'startTime': TimeOfDay(...), 'endTime': TimeOfDay(...), 'enabled': true } ]
   Map<String, List<Map<String, dynamic>>> _schedules = {};
 
-  // IDs de horarios eliminados localmente para borrar en backend al guardar
-  final List<String> _deletedScheduleIds = [];
-
   final List<String> _daysOfWeek = [
     'Lunes',
     'Martes',
@@ -79,32 +76,24 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> {
     };
 
     if (response.isSuccess && response.data != null) {
-      debugPrint("🗓️ RAW SCHEDULE DATA: ${response.data}"); // DEBUG LOG
-      for (var item in response.data!) {
-        debugPrint("  -> Item: $item"); // DEBUG LOG
+      final jsonSchedule = response.data!;
 
-        // Use toString() to be safe against int/string differences
-        var dayRaw = item['diaSemana']?.toString() ?? '';
+      for (var day in _daysOfWeek) {
+        if (jsonSchedule.containsKey(day) && jsonSchedule[day] is List) {
+          final items = jsonSchedule[day] as List;
+          for (var item in items) {
+            newSchedules[day]!.add({
+              'enabled': item['activo'] ?? true,
 
-        // MAPPING FIX: Backend might send "1".."7" or English names. Map to Spanish.
-        var day = _mapDayToSpanish(dayRaw);
-        debugPrint("  -> Mapped '$dayRaw' to '$day'"); // DEBUG LOG
-
-        if (_daysOfWeek.contains(day)) {
-          newSchedules[day]!.add({
-            'id': item['id'],
-            'enabled': item['activo'] ?? true,
-            'startTime': _parseTime(item['horaInicio']),
-            'endTime': _parseTime(item['horaFin']),
-          });
+              'startTime': _parseTime(item['horaInicio']),
+              'endTime': _parseTime(item['horaFin']),
+            });
+          }
         }
       }
-    } else {
-      debugPrint("❌ Failed to load schedules: ${response.message}");
     }
 
     _schedules = newSchedules;
-    _deletedScheduleIds.clear();
   }
 
   TimeOfDay _parseTime(String timeStr) {
@@ -120,101 +109,54 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> {
     return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
 
-  String _mapDayToSpanish(String unknownDay) {
-    // 1. Try direct match with digits (1=Lunes, 7=Domingo)
-    switch (unknownDay) {
-      case '1':
-        return 'Lunes';
-      case '2':
-        return 'Martes';
-      case '3':
-        return 'Miércoles';
-      case '4':
-        return 'Jueves';
-      case '5':
-        return 'Viernes';
-      case '6':
-        return 'Sábado';
-      case '7':
-        return 'Domingo';
-    }
-
-    // 2. Try English names
-    final lower = unknownDay.toLowerCase();
-    if (lower.contains('mon')) return 'Lunes';
-    if (lower.contains('tue')) return 'Martes';
-    if (lower.contains('wed')) return 'Miércoles';
-    if (lower.contains('thu')) return 'Jueves';
-    if (lower.contains('fri')) return 'Viernes';
-    if (lower.contains('sat')) return 'Sábado';
-    if (lower.contains('sun')) return 'Domingo';
-
-    // 3. Return original if nothing matches (hopefully it's already Spanish)
-    return unknownDay;
-  }
-
-  Future<void> _saveDaySchedule(String day) async {
-    final daySchedules = _schedules[day];
-    if (daySchedules == null) return;
-
-    for (var schedule in daySchedules) {
-      final isEnabled = schedule['enabled'] as bool;
-      final startTime = _formatTime(schedule['startTime'] as TimeOfDay);
-      final endTime = _formatTime(schedule['endTime'] as TimeOfDay);
-      final id = schedule['id'] as String?;
-
-      try {
-        if (id != null) {
-          // Actualizar existente
-          await _employeeService.updateWorkSchedule(
-            employeeId: widget.employee.id,
-            scheduleId: id,
-            horaInicio: startTime,
-            horaFin: endTime,
-            activo: isEnabled,
-          );
-        } else {
-          // Crear nuevo
-          final response = await _employeeService.createWorkSchedule(
-            employeeId: widget.employee.id,
-            diaSemana: day,
-            horaInicio: startTime,
-            horaFin: endTime,
-            activo: isEnabled,
-          );
-          if (response.isSuccess) {
-            schedule['id'] = response.data!['id'];
-          }
-        }
-      } catch (e) {
-        debugPrint('Error saving schedule for $day: $e');
-      }
-    }
-  }
-
   Future<void> _saveAllSchedules() async {
     setState(() => _isLoading = true);
 
-    // 1. Eliminar horarios borrados
-    for (var id in _deletedScheduleIds) {
-      try {
-        await _employeeService.deleteWorkSchedule(widget.employee.id, id);
-      } catch (e) {
-        debugPrint('Error deleting schedule $id: $e');
+    // Preparar el JSON para enviar
+    final Map<String, dynamic> scheduleJson = {};
+
+    _schedules.forEach((day, turns) {
+      if (turns.isNotEmpty) {
+        scheduleJson[day] = turns
+            .map(
+              (t) => {
+                'horaInicio': _formatTime(t['startTime'] as TimeOfDay),
+
+                'horaFin': _formatTime(t['endTime'] as TimeOfDay),
+                'activo': t['enabled'] as bool,
+              },
+            )
+            .toList();
+      }
+    });
+
+    try {
+      final response = await _employeeService.updateWorkSchedule(
+        employeeId: widget.employee.id,
+        horarioLaboral: scheduleJson,
+      );
+
+      if (!mounted) return;
+
+      if (response.isSuccess) {
+        SnackBarHelper.showSuccess(context, 'Horarios guardados correctamente');
+        // Recargar para sincronizar (aunque ahora es local-first)
+        await _loadSchedules();
+      } else {
+        SnackBarHelper.showError(
+          context,
+          'Error al guardar: ${response.message}',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Error inesperado: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
-    _deletedScheduleIds.clear();
-
-    // 2. Guardar/Actualizar horarios vigentes
-    await Future.wait(_daysOfWeek.map((day) => _saveDaySchedule(day)));
-
-    // 3. Recargar datos para sincronizar IDs generados por el backend
-    await _loadSchedules();
-
-    if (!mounted) return;
-
-    setState(() => _isLoading = false);
-    SnackBarHelper.showSuccess(context, 'Horarios guardados correctamente');
   }
 
   @override
@@ -224,19 +166,15 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> {
       backgroundColor: DesignSystem.backgroundColor,
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(DesignSystem.spacingM),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [], // OPTIMIZATION: Removed shadow
-        ),
+        decoration: BoxDecoration(color: Colors.white, boxShadow: const []),
         child: SafeArea(child: _buildSaveButton()),
       ),
       body: Column(
         children: [
-          // HEADING MEJORADO: Botón de atrás activado
           AppHeader(
             title: 'Gestión de Horario',
             subtitle: widget.employee.nombre,
-            showBackButton: true, // ¡ACTIVADO!
+            showBackButton: true,
             showMenu: false,
           ),
           Expanded(
@@ -307,15 +245,12 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> {
     if (daySchedules == null) return const SizedBox.shrink();
 
     final hasSchedules = daySchedules.isNotEmpty;
-    // Comprobamos si hay al menos un horario habilitado para pintar el día como "activo"
     final hasActiveSchedules = daySchedules.any((s) => s['enabled'] == true);
 
     return Container(
       margin: const EdgeInsets.only(bottom: DesignSystem.spacingM),
-      // Layout del contenedor principal del día
       decoration: BoxDecoration(
-        // OPTIMIZATION: Shadows removed for performance
-        boxShadow: [],
+        boxShadow: const [],
         border: hasActiveSchedules
             ? Border.all(
                 color: DesignSystem.primaryColor.withValues(alpha: 0.3),
@@ -325,7 +260,6 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> {
       ),
       child: Column(
         children: [
-          // Header del Día
           Container(
             padding: const EdgeInsets.symmetric(
               horizontal: DesignSystem.spacingM,
@@ -375,6 +309,7 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> {
                     setState(() {
                       _schedules[day]!.add({
                         'enabled': true,
+
                         'startTime': const TimeOfDay(hour: 9, minute: 0),
                         'endTime': const TimeOfDay(hour: 18, minute: 0),
                       });
@@ -476,10 +411,7 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen> {
                 ),
                 onPressed: () {
                   setState(() {
-                    final removed = _schedules[day]!.removeAt(index);
-                    if (removed['id'] != null) {
-                      _deletedScheduleIds.add(removed['id']);
-                    }
+                    _schedules[day]!.removeAt(index);
                   });
                 },
               ),

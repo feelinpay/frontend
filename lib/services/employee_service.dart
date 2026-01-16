@@ -364,26 +364,22 @@ class EmployeeService {
   // ========================================
 
   /// Obtener horarios laborales de un empleado
-  Future<api_models.ApiResponse<List<Map<String, dynamic>>>> getWorkSchedules(
+  Future<api_models.ApiResponse<Map<String, dynamic>>> getWorkSchedules(
     String employeeId,
   ) async {
-    // FIX: Backend returns { success: true, data: [...] }
-    // ApiService unwraps 'data', so we get a List, not a Map.
-    final response = await _apiService.get<List<dynamic>>(
+    final response = await _apiService.get<Map<String, dynamic>>(
       '${AppConfig.ownerEndpoint}/employees/$employeeId/horarios-laborales',
     );
 
     if (response.isSuccess && response.data != null) {
-      final schedulesList = response.data!; // This is already the list
-
-      return api_models.ApiResponse<List<Map<String, dynamic>>>(
+      return api_models.ApiResponse<Map<String, dynamic>>(
         success: true,
         message: response.message,
-        data: schedulesList.map((e) => e as Map<String, dynamic>).toList(),
+        data: response.data!,
       );
     }
 
-    return api_models.ApiResponse<List<Map<String, dynamic>>>(
+    return api_models.ApiResponse<Map<String, dynamic>>(
       success: false,
       message: response.message,
       errors: response.errors,
@@ -391,7 +387,33 @@ class EmployeeService {
     );
   }
 
-  /// Crear horario laboral
+  /// Actualizar horario laboral completo
+  Future<api_models.ApiResponse<Map<String, dynamic>>> updateWorkSchedule({
+    required String employeeId,
+    required Map<String, dynamic> horarioLaboral,
+  }) async {
+    final response = await _apiService.put<Map<String, dynamic>>(
+      '${AppConfig.ownerEndpoint}/employees/$employeeId/horarios-laborales',
+      data: {'horarioLaboral': horarioLaboral},
+    );
+
+    if (response.isSuccess && response.data != null) {
+      return api_models.ApiResponse<Map<String, dynamic>>(
+        success: true,
+        message: response.message,
+        data: response.data!,
+      );
+    }
+
+    return api_models.ApiResponse<Map<String, dynamic>>(
+      success: false,
+      message: response.message,
+      errors: response.errors,
+      statusCode: response.statusCode,
+    );
+  }
+
+  // Métodos de compatibilidad (obsoletos)
   Future<api_models.ApiResponse<Map<String, dynamic>>> createWorkSchedule({
     required String employeeId,
     required String diaSemana,
@@ -399,81 +421,14 @@ class EmployeeService {
     required String horaFin,
     bool activo = true,
   }) async {
-    final response = await _apiService.post<Map<String, dynamic>>(
-      '${AppConfig.ownerEndpoint}/employees/$employeeId/horarios-laborales',
-      data: {
-        'diaSemana': diaSemana,
-        'horaInicio': horaInicio,
-        'horaFin': horaFin,
-        'activo': activo,
-      },
-    );
-
-    if (response.isSuccess && response.data != null) {
-      return api_models.ApiResponse<Map<String, dynamic>>(
-        success: true,
-        message: response.message,
-        data: response.data!,
-      );
-    }
-
-    return api_models.ApiResponse<Map<String, dynamic>>(
-      success: false,
-      message: response.message,
-      errors: response.errors,
-      statusCode: response.statusCode,
-    );
+    return api_models.ApiResponse(success: false, message: 'Obsoleto');
   }
 
-  /// Actualizar horario laboral
-  Future<api_models.ApiResponse<Map<String, dynamic>>> updateWorkSchedule({
-    required String employeeId,
-    required String scheduleId,
-    String? horaInicio,
-    String? horaFin,
-    bool? activo,
-  }) async {
-    final data = <String, dynamic>{};
-    if (horaInicio != null) data['horaInicio'] = horaInicio;
-    if (horaFin != null) data['horaFin'] = horaFin;
-    if (activo != null) data['activo'] = activo;
-
-    final response = await _apiService.put<Map<String, dynamic>>(
-      '${AppConfig.ownerEndpoint}/employees/$employeeId/horarios-laborales/$scheduleId',
-      data: data,
-    );
-
-    if (response.isSuccess && response.data != null) {
-      return api_models.ApiResponse<Map<String, dynamic>>(
-        success: true,
-        message: response.message,
-        data: response.data!,
-      );
-    }
-
-    return api_models.ApiResponse<Map<String, dynamic>>(
-      success: false,
-      message: response.message,
-      errors: response.errors,
-      statusCode: response.statusCode,
-    );
-  }
-
-  /// Eliminar horario laboral
   Future<api_models.ApiResponse<void>> deleteWorkSchedule(
     String employeeId,
     String scheduleId,
   ) async {
-    final response = await _apiService.delete<Map<String, dynamic>>(
-      '${AppConfig.ownerEndpoint}/employees/$employeeId/horarios-laborales/$scheduleId',
-    );
-
-    return api_models.ApiResponse<void>(
-      success: response.isSuccess,
-      message: response.message,
-      errors: response.errors,
-      statusCode: response.statusCode,
-    );
+    return api_models.ApiResponse(success: false, message: 'Obsoleto');
   }
 }
 

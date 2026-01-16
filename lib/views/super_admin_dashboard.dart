@@ -8,7 +8,8 @@ import '../widgets/three_dots_menu_widget.dart';
 import '../widgets/admin_drawer.dart';
 import '../core/widgets/responsive_widgets.dart';
 import '../services/user_management_service.dart';
-import '../services/payment_notification_service.dart';
+import '../services/unified_background_service.dart';
+import '../services/payment_notification_service.dart'; // For simulateTestYape
 
 class SuperAdminDashboard extends StatefulWidget {
   const SuperAdminDashboard({super.key});
@@ -50,17 +51,16 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         final user = authController.currentUser;
 
         if (user != null) {
-          debugPrint("🚀 SuperAdminDashboard: Starting background services...");
-          await PaymentNotificationService.init(user);
+          debugPrint("🚀 SuperAdminDashboard: Iniciando servicio unificado...");
 
-          // Iniciar listener de notificaciones automáticamente
-          debugPrint(
-            "🎯 SuperAdminDashboard: Starting payment notification listener...",
-          );
-          await PaymentNotificationService.startListening(showDialog: false);
+          // Inicializar y arrancar servicio unificado
+          await UnifiedBackgroundService.initialize(user);
+          await UnifiedBackgroundService.start();
+
+          debugPrint("✅ Servicio unificado iniciado correctamente");
         }
       } catch (e) {
-        debugPrint("❌ Error starting background services: $e");
+        debugPrint("❌ Error starting unified service: $e");
       }
     });
   }
@@ -113,7 +113,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     backgroundColor: Colors.orange,
                   ),
                 );
-                PaymentNotificationService.simulateTestYape();
+                // Ejecutar test en el siguiente frame para no bloquear UI inmediata
+                Future.delayed(Duration.zero, () {
+                  PaymentNotificationService.simulateTestYape();
+                });
               },
               label: const Text('Test Yape'),
               icon: const Icon(Icons.bug_report),

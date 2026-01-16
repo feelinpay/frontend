@@ -72,7 +72,7 @@ class UserModel {
 
     // Parse permissions safely
     List<Permission> parsedPermissions = [];
-    if (json['rol'] != null && json['rol']['permisos'] != null) {
+    if (json['rol'] is Map && json['rol']['permisos'] != null) {
       final rolPermisos = json['rol']['permisos'];
       if (rolPermisos is List) {
         for (var rp in rolPermisos) {
@@ -92,6 +92,7 @@ class UserModel {
       rolNombre: json['rol'] is Map
           ? json['rol']['nombre']
           : json['rolNombre']?.toString(),
+
       imagen: json['imagen'],
       activo: json['activo'] ?? false,
       enPeriodoPrueba: enPrueba,

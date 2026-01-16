@@ -191,9 +191,13 @@ class SMSService {
             final schedules = schedulesResponse.data!;
 
             // Buscar todos los horarios de hoy (Soporte horario partido)
-            final todaySchedules = schedules
-                .where((s) => s['diaSemana'] == dayName && s['activo'] == true)
-                .toList();
+            // schedules es ahora un Map<String, dynamic> { 'Lunes': [...], ... }
+            final List<dynamic>? todaySchedulesRaw = schedules[dayName];
+            final List<Map<String, dynamic>> todaySchedules =
+                (todaySchedulesRaw ?? [])
+                    .map((s) => s as Map<String, dynamic>)
+                    .where((s) => s['activo'] == true)
+                    .toList();
 
             if (todaySchedules.isNotEmpty) {
               for (var schedule in todaySchedules) {
@@ -353,10 +357,13 @@ class SMSService {
       if (schedulesResponse.isSuccess && schedulesResponse.data != null) {
         final schedules = schedulesResponse.data!;
 
-        // Filtrar todos los horarios de HOY
-        final todaySchedules = schedules
-            .where((s) => s['diaSemana'] == dayName && s['activo'] == true)
-            .toList();
+        // schedules es un Map<String, dynamic> { 'Lunes': [...], ... }
+        final List<dynamic>? todaySchedulesRaw = schedules[dayName];
+        final List<Map<String, dynamic>> todaySchedules =
+            (todaySchedulesRaw ?? [])
+                .map((s) => s as Map<String, dynamic>)
+                .where((s) => s['activo'] == true)
+                .toList();
 
         // Si no tiene horarios hoy, no trabaja
         if (todaySchedules.isEmpty) return false;

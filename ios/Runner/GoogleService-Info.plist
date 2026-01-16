@@ -3,23 +3,23 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>136817731846-0ftkne3t0t048riv22heoapt6a8o5730.apps.googleusercontent.com</string>
+	<string>607923304959-5ronmvida8fsnim3cv62ccelk398nhj0.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.136817731846-0ftkne3t0t048riv22heoapt6a8o5730</string>
+	<string>com.googleusercontent.apps.607923304959-5ronmvida8fsnim3cv62ccelk398nhj0</string>
 	<key>ANDROID_CLIENT_ID</key>
-	<string>136817731846-fp8vb9ato5mm2s0p7vtta8kcggqns7si.apps.googleusercontent.com</string>
+	<string>607923304959-t0iahhmsvjs5b8ds50tcnel769imnn5n.apps.googleusercontent.com</string>
 	<key>API_KEY</key>
-	<string>AIzaSyCaQDumloaVCySMraXYRGlnO-Spsz9DDf4</string>
+	<string>AIzaSyDg5gR7bbOtp3Pv4lmfqVA8IoKJi5kVabI</string>
 	<key>GCM_SENDER_ID</key>
-	<string>136817731846</string>
+	<string>607923304959</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
 	<string>com.example.feelinPay</string>
 	<key>PROJECT_ID</key>
-	<string>feelin-pay-c15ac</string>
+	<string>feelin-pay-a345a</string>
 	<key>STORAGE_BUCKET</key>
-	<string>feelin-pay-c15ac.firebasestorage.app</string>
+	<string>feelin-pay-a345a.firebasestorage.app</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
@@ -31,6 +31,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:136817731846:ios:02ec30ca8aa921548ed687</string>
+	<string>1:607923304959:ios:1f4161a079332f92488fca</string>
 </dict>
 </plist>

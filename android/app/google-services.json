@@ -1,45 +1,45 @@
 {
   "project_info": {
-    "project_number": "136817731846",
-    "project_id": "feelin-pay-c15ac",
-    "storage_bucket": "feelin-pay-c15ac.firebasestorage.app"
+    "project_number": "607923304959",
+    "project_id": "feelin-pay-a345a",
+    "storage_bucket": "feelin-pay-a345a.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:136817731846:android:16c2dfd65501c97a8ed687",
+        "mobilesdk_app_id": "1:607923304959:android:7cb24de543b51f92488fca",
         "android_client_info": {
           "package_name": "com.example.feelin_pay"
         }
       },
       "oauth_client": [
         {
-          "client_id": "136817731846-fp8vb9ato5mm2s0p7vtta8kcggqns7si.apps.googleusercontent.com",
+          "client_id": "607923304959-t0iahhmsvjs5b8ds50tcnel769imnn5n.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.example.feelin_pay",
-            "certificate_hash": "7851312a210c41e25004fc7ea2b7641dad78fecf"
+            "certificate_hash": "23a3a61a00fc41a23ea1fcc5371994f2f3671af0"
           }
         },
         {
-          "client_id": "136817731846-smurvc37qgut87sco3k4lv7ggfdi4fcu.apps.googleusercontent.com",
+          "client_id": "607923304959-39h6usdv60jhb446qmrsb05v74t335nc.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyDSJf9zUqcoehVa-oz4-Zp0-PCfURfrobQ"
+          "current_key": "AIzaSyCNQ-1DPxYE2J0Y_RuObg7KEVJ9dMrNHSo"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "136817731846-smurvc37qgut87sco3k4lv7ggfdi4fcu.apps.googleusercontent.com",
+              "client_id": "607923304959-t0iahhmsvjs5b8ds50tcnel769imnn5n.apps.googleusercontent.com",
               "client_type": 3
             },
             {
-              "client_id": "136817731846-0ftkne3t0t048riv22heoapt6a8o5730.apps.googleusercontent.com",
+              "client_id": "607923304959-5ronmvida8fsnim3cv62ccelk398nhj0.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
                 "bundle_id": "com.example.feelinPay"

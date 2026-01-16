@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 /// Configuración de la aplicación
 class AppConfig {
   // Configuración del servidor backend
-  // Configuración del servidor backend - USAR LOCALHOST (REQUIERE ADB REVERSE)
+  // Configuración del servidor backend - USAR localhost (REQUIERE ADB REVERSE)
   static const String apiBaseUrl = 'http://localhost:3001/api';
 
   // Configuración de CORS (para desarrollo)

@@ -277,16 +277,16 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
         isRequired: true,
       ),
       _PermissionData(
-        icon: Icons.flash_on_outlined,
-        title: 'Acceso a Notificaciones',
-        permission: null,
-        isGrantedOverride: _notificationListenerGranted,
-        isRequired: true,
-      ),
-      _PermissionData(
         icon: Icons.battery_alert,
         title: 'Segundo Plano',
         permission: Permission.ignoreBatteryOptimizations,
+        isRequired: true,
+      ),
+      _PermissionData(
+        icon: Icons.notifications_active,
+        title: 'Acceso a Notificaciones',
+        permission: null,
+        isGrantedOverride: _notificationListenerGranted,
         isRequired: true,
       ),
     ];
@@ -309,10 +309,7 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
     return InkWell(
       onTap: () async {
         if (p.permission == Permission.ignoreBatteryOptimizations) {
-          // Si es batería, SIEMPRE intentar abrir settings para que el usuario verifique
-          debugPrint(
-            '⚙️ Abriendo configuración de batería para verificación manual',
-          );
+          // Solicitar permiso directamente sin redirigir
           await p.permission!.request();
         } else if (p.permission != null) {
           await p.permission!.request();
