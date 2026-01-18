@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import '../core/design/design_system.dart';
-import '../services/user_management_service.dart';
+import '../services/employee_service.dart';
 import '../models/employee_model.dart';
 import '../views/country_picker.dart';
 import '../widgets/snackbar_helper.dart';
@@ -27,7 +27,7 @@ class _EditEmployeeDialogState extends State<EditEmployeeDialog> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
-  final _userService = UserManagementService();
+  final _employeeService = EmployeeService();
 
   final _phoneFormatter = MaskTextInputFormatter(
     mask: '### ### ###',
@@ -44,8 +44,6 @@ class _EditEmployeeDialogState extends State<EditEmployeeDialog> {
 
   bool _isLoading = false;
   String? _errorMessage; // NEW: Local error state for better visibility
-  late bool _activo;
-
   // Lista 'quick' para fallback
   final List<Country> _knownCountries = [
     Country(name: 'Perú', code: 'PE', dialCode: '+51', flag: '🇵🇪'),
@@ -56,7 +54,6 @@ class _EditEmployeeDialogState extends State<EditEmployeeDialog> {
   @override
   void initState() {
     super.initState();
-    _activo = widget.employee.activo;
     _nameController = TextEditingController(text: widget.employee.nombre);
 
     // Parse phone number
@@ -110,12 +107,10 @@ class _EditEmployeeDialogState extends State<EditEmployeeDialog> {
         '',
       );
 
-      final response = await _userService.updateEmployeeForOwner(
-        widget.ownerId,
-        widget.employee.id,
+      final response = await _employeeService.updateEmployee(
+        employeeId: widget.employee.id,
         nombre: _nameController.text,
         telefono: '${_selectedCountry.dialCode}$cleanPhone',
-        activo: _activo,
       );
 
       if (!mounted) return;

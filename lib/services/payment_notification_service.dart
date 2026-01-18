@@ -199,6 +199,15 @@ class PaymentNotificationService {
       logger('   Texto: ${evt.text}');
       logger('----------------------------------------');
 
+      // FILTRO: Ignorar notificaciones de grupo de Android (sin contenido)
+      if (evt.title == null ||
+          evt.title!.isEmpty ||
+          evt.text == null ||
+          evt.text!.isEmpty) {
+        logger('ℹ️ Notificación de grupo o sin contenido. Ignorando.');
+        return;
+      }
+
       // Procesar solo si es Yape (Soportamos varias versiones del paquete)
       final yapePackages = [
         'com.bcp.innovacxion.yapeapp',
@@ -263,9 +272,6 @@ class PaymentNotificationService {
             nombre: 'Servicio de Fondo',
             email: 'service@feelin-pay.com',
             activo: true,
-            enPeriodoPrueba: false,
-            diasPruebaRestantes: 0,
-            emailVerificado: true,
             createdAt: DateTime.now(),
             updatedAt: DateTime.now(),
           );
@@ -368,6 +374,24 @@ class PaymentNotificationService {
 
       logger('🌉 Enviando pago al servidor para procesar SMS...');
 
+      // Obtener token de Google desde SharedPreferences (cacheado en login)
+      String? googleAccessToken;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        googleAccessToken = prefs.getString('bg_google_token');
+        if (googleAccessToken != null) {
+          logger(
+            '🔑 Token de Google recuperado para uso en Drive del usuario.',
+          );
+        } else {
+          logger(
+            '⚠️ Sin token de Google. Se usará Service Account (puede tener cuota limitada).',
+          );
+        }
+      } catch (e) {
+        logger('⚠️ Error recuperando token de Google: $e');
+      }
+
       final response = await _apiService!.post<Map<String, dynamic>>(
         '/payments/yape',
         data: {
@@ -377,6 +401,8 @@ class PaymentNotificationService {
           'codigoSeguridad': paymentData['codigoSeguridad'],
           'medioDePago': paymentData['medioDePago'], // 'yape' o 'plin'
           'notifUniqueId': paymentData['uniqueId'],
+          'googleAccessToken':
+              googleAccessToken, // NUEVO: Token para usar Drive del usuario
         },
       );
 

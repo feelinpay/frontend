@@ -19,6 +19,11 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
 
+    // Suprimir warnings de plugins externos
+    tasks.withType<JavaCompile> {
+        options.compilerArgs.addAll(listOf("-Xlint:-unchecked", "-Xlint:-deprecation"))
+    }
+
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }

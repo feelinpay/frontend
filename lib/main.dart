@@ -29,9 +29,6 @@ final DashboardController _dashboardController = DashboardController();
 final NotificationController _notificationController = NotificationController();
 final SystemController _systemController = SystemController();
 
-// ... imports
-// ... imports
-
 void main() async {
   runZonedGuarded(
     () async {

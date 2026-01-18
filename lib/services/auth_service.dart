@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // NEW
+import 'package:shared_preferences/shared_preferences.dart';
 import 'google_drive_service.dart';
 import '../models/user_model.dart';
 import '../models/api_response.dart' as api_models;
@@ -18,65 +18,6 @@ class AuthService {
         '607923304959-39h6usdv60jhb446qmrsb05v74t335nc.apps.googleusercontent.com',
     scopes: ['email', 'https://www.googleapis.com/auth/drive.file'],
   );
-
-  // ========================================
-  // REGISTRO DE USUARIO
-  // ========================================
-
-  /// Registrar nuevo usuario
-  Future<api_models.ApiResponse<UserModel>> register({
-    required String nombre,
-    required String telefono,
-    required String email,
-    required String password,
-    required String confirmPassword,
-  }) async {
-    final response = await _apiService.post<Map<String, dynamic>>(
-      '/public/auth/register',
-      data: {
-        'nombre': nombre,
-        'telefono': telefono,
-        'email': email,
-        'password': password,
-        'confirmPassword': confirmPassword,
-      },
-      requireAuth: false,
-    );
-
-    if (response.isSuccess && response.data != null) {
-      return api_models.ApiResponse<UserModel>(
-        success: true,
-        message: response.message,
-        data: UserModel.fromJson(response.data!),
-      );
-    }
-
-    return api_models.ApiResponse<UserModel>(
-      success: false,
-      message: response.message,
-      errors: response.errors,
-      statusCode: response.statusCode,
-    );
-  }
-
-  /// Verificar código OTP de registro
-  Future<api_models.ApiResponse<void>> verifyRegistrationOtp({
-    required String email,
-    required String codigo,
-  }) async {
-    final response = await _apiService.post<Map<String, dynamic>>(
-      '/public/auth/verify-otp',
-      data: {'email': email, 'codigo': codigo, 'tipo': 'EMAIL_VERIFICATION'},
-      requireAuth: false,
-    );
-
-    return api_models.ApiResponse<void>(
-      success: response.isSuccess,
-      message: response.message,
-      errors: response.errors,
-      statusCode: response.statusCode,
-    );
-  }
 
   // ========================================
   // LOGIN CON GOOGLE
@@ -125,7 +66,6 @@ class AuthService {
       }
 
       // 4. Enviar token al backend para autenticación
-      // Enviamos múltiples variantes del nombre del campo y datos extra
       final response = await _apiService.post<Map<String, dynamic>>(
         '/auth/google',
         data: {
@@ -136,7 +76,7 @@ class AuthService {
           'googleToken': idToken,
           'accessToken': accessToken,
           'access_token': accessToken,
-
+          'refreshToken': account.serverAuthCode, // ✅ Para refresh automático
           // Información del perfil
           'email': account.email,
           'name': account.displayName,
@@ -170,8 +110,7 @@ class AuthService {
 
         // CACHEAR TOKEN DE GOOGLE EXPLÍCITAMENTE
         try {
-          final auth = await account
-              .authentication; // Usamos 'account' que ya tenemos definido arriba
+          final auth = await account.authentication;
           final gToken = auth.accessToken;
           if (gToken != null) {
             final prefs = await SharedPreferences.getInstance();
@@ -218,188 +157,6 @@ class AuthService {
   }
 
   // ========================================
-  // LOGIN Y AUTENTICACIÓN
-  // ========================================
-
-  /// Iniciar sesión
-  Future<api_models.ApiResponse<LoginResponse>> login({
-    required String email,
-    required String password,
-  }) async {
-    final response = await _apiService.post<Map<String, dynamic>>(
-      '/public/auth/login',
-      data: {'email': email, 'password': password},
-      requireAuth: false,
-    );
-
-    if (response.isSuccess && response.data != null) {
-      final data = response.data!;
-
-      // Verificar si requiere OTP
-      if (data['requiresOTP'] == true) {
-        return api_models.ApiResponse<LoginResponse>(
-          success: true,
-          message: response.message,
-          data: LoginResponse(
-            requiresOTP: true,
-            email: data['email'],
-            token: null,
-            user: null,
-          ),
-        );
-      }
-
-      // Login exitoso con token
-      if (data['token'] != null) {
-        await _apiService.setAuthToken(data['token']);
-
-        // Persist for background service
-        if (data['user'] != null && data['user']['id'] != null) {
-          await _saveAuthDataToPrefs(
-            data['token'],
-            data['user']['id'].toString(),
-          );
-        }
-
-        return api_models.ApiResponse<LoginResponse>(
-          success: true,
-          message: response.message,
-          data: LoginResponse(
-            requiresOTP: false,
-            email: data['email'],
-            token: data['token'],
-            user: data['user'] != null
-                ? UserModel.fromJson(data['user'] as Map<String, dynamic>)
-                : null,
-          ),
-        );
-      }
-    }
-
-    return api_models.ApiResponse<LoginResponse>(
-      success: false,
-      message: response.message,
-      errors: response.errors,
-      statusCode: response.statusCode,
-    );
-  }
-
-  /// Verificar código OTP de login
-  Future<api_models.ApiResponse<LoginResponse>> verifyLoginOtp({
-    required String email,
-    required String codigo,
-  }) async {
-    final response = await _apiService.post<Map<String, dynamic>>(
-      '/public/auth/verify-otp',
-      data: {'email': email, 'codigo': codigo, 'tipo': 'LOGIN_VERIFICATION'},
-      requireAuth: false,
-    );
-
-    if (response.isSuccess && response.data != null) {
-      final data = response.data!;
-
-      if (data['token'] != null) {
-        await _apiService.setAuthToken(data['token']);
-
-        // Persist for background service
-        if (data['user'] != null && data['user']['id'] != null) {
-          await _saveAuthDataToPrefs(
-            data['token'],
-            data['user']['id'].toString(),
-          );
-        }
-
-        return api_models.ApiResponse<LoginResponse>(
-          success: true,
-          message: response.message,
-          data: LoginResponse(
-            requiresOTP: false,
-            email: data['email'],
-            token: data['token'],
-            user: data['user'] != null
-                ? UserModel.fromJson(data['user'] as Map<String, dynamic>)
-                : null,
-          ),
-        );
-      }
-    }
-
-    return api_models.ApiResponse<LoginResponse>(
-      success: false,
-      message: response.message,
-      errors: response.errors,
-      statusCode: response.statusCode,
-    );
-  }
-
-  /// Reenviar código OTP
-  Future<api_models.ApiResponse<void>> resendOtp({
-    required String email,
-    required String tipo, // 'EMAIL_VERIFICATION', 'LOGIN_VERIFICATION'
-  }) async {
-    final response = await _apiService.post<Map<String, dynamic>>(
-      '/public/auth/resend-otp',
-      data: {'email': email, 'tipo': tipo},
-      requireAuth: false,
-    );
-
-    return api_models.ApiResponse<void>(
-      success: response.isSuccess,
-      message: response.message,
-      errors: response.errors,
-      statusCode: response.statusCode,
-    );
-  }
-
-  // ========================================
-  // RECUPERACIÓN DE CONTRASEÑA
-  // ========================================
-
-  /// Solicitar reset de contraseña
-  Future<api_models.ApiResponse<void>> forgotPassword({
-    required String email,
-  }) async {
-    final response = await _apiService.post<Map<String, dynamic>>(
-      '/public/auth/forgot-password',
-      data: {'email': email},
-      requireAuth: false,
-    );
-
-    return api_models.ApiResponse<void>(
-      success: response.isSuccess,
-      message: response.message,
-      errors: response.errors,
-      statusCode: response.statusCode,
-    );
-  }
-
-  /// Resetear contraseña
-  Future<api_models.ApiResponse<void>> resetPassword({
-    required String email,
-    required String codigo,
-    required String newPassword,
-    required String confirmPassword,
-  }) async {
-    final response = await _apiService.post<Map<String, dynamic>>(
-      '/public/auth/reset-password',
-      data: {
-        'email': email,
-        'codigo': codigo,
-        'newPassword': newPassword,
-        'confirmPassword': confirmPassword,
-      },
-      requireAuth: false,
-    );
-
-    return api_models.ApiResponse<void>(
-      success: response.isSuccess,
-      message: response.message,
-      errors: response.errors,
-      statusCode: response.statusCode,
-    );
-  }
-
-  // ========================================
   // GESTIÓN DE PERFIL
   // ========================================
 
@@ -432,7 +189,7 @@ class AuthService {
     required String telefono,
   }) async {
     final response = await _apiService.put<Map<String, dynamic>>(
-      '/auth/profile', // Standardizing to /auth/profile
+      '/auth/profile',
       data: {'nombre': nombre, 'telefono': telefono},
     );
 
@@ -446,82 +203,6 @@ class AuthService {
 
     return api_models.ApiResponse<UserModel>(
       success: false,
-      message: response.message,
-      errors: response.errors,
-      statusCode: response.statusCode,
-    );
-  }
-
-  /// Cambiar contraseña
-  Future<api_models.ApiResponse<void>> changePassword({
-    required String currentPassword,
-    required String newPassword,
-    required String confirmPassword,
-  }) async {
-    final response = await _apiService.patch<Map<String, dynamic>>(
-      '/auth/password',
-      data: {
-        'currentPassword': currentPassword,
-        'newPassword': newPassword,
-        'confirmPassword': confirmPassword,
-      },
-    );
-
-    return api_models.ApiResponse<void>(
-      success: response.isSuccess,
-      message: response.message,
-      errors: response.errors,
-      statusCode: response.statusCode,
-    );
-  }
-
-  /// Solicitar cambio de email
-  Future<api_models.ApiResponse<void>> requestEmailChange({
-    required String newEmail,
-  }) async {
-    final response = await _apiService.post<Map<String, dynamic>>(
-      '/owner/profile/email/request',
-      data: {'newEmail': newEmail},
-    );
-
-    return api_models.ApiResponse<void>(
-      success: response.isSuccess,
-      message: response.message,
-      errors: response.errors,
-      statusCode: response.statusCode,
-    );
-  }
-
-  /// Confirmar cambio de email
-  Future<api_models.ApiResponse<void>> confirmEmailChange({
-    required String newEmail,
-    required String codigo,
-  }) async {
-    final response = await _apiService.post<Map<String, dynamic>>(
-      '/owner/profile/profile/email/confirm',
-      data: {'newEmail': newEmail, 'codigo': codigo},
-    );
-
-    return api_models.ApiResponse<void>(
-      success: response.isSuccess,
-      message: response.message,
-      errors: response.errors,
-      statusCode: response.statusCode,
-    );
-  }
-
-  /// Verificar cambio de email
-  Future<api_models.ApiResponse<void>> verifyEmailChange({
-    required String newEmail,
-    required String codigo,
-  }) async {
-    final response = await _apiService.post<Map<String, dynamic>>(
-      '/owner/profile/verify-email',
-      data: {'newEmail': newEmail, 'codigo': codigo},
-    );
-
-    return api_models.ApiResponse<void>(
-      success: response.isSuccess,
       message: response.message,
       errors: response.errors,
       statusCode: response.statusCode,
@@ -570,9 +251,6 @@ class AuthService {
   }
 
   /// Recuperar el Access Token de Google actual
-  /// Nota: Si ha expirado, google_sign_in intentará refrescarlo internamente al pedir autenticación
-  /// Recuperar el Access Token de Google actual
-  /// Nota: Si ha expirado, google_sign_in intentará refrescarlo internamente al pedir autenticación
   Future<String?> getGoogleAccessToken() async {
     try {
       // Si no hay usuario logueado en la instancia, intentamos signInSilently
@@ -602,21 +280,4 @@ class AuthService {
     }
     return null;
   }
-}
-
-// ========================================
-// MODELOS DE RESPUESTA
-// ========================================
-
-/// Respuesta de login que puede requerir OTP
-class LoginResponse {
-  final bool requiresOTP;
-  final String? email;
-  final String? token;
-  final UserModel? user;
-
-  LoginResponse({required this.requiresOTP, this.email, this.token, this.user});
-
-  /// Verificar si el login fue exitoso
-  bool get isSuccessful => !requiresOTP && token != null;
 }

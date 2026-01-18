@@ -5,14 +5,14 @@ import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sig
 
 class GoogleDriveService {
   static const String _folderName = 'Reporte de Pagos - Feelin Pay';
-  static const String _serviceAccountEmail =
-      'firebase-adminsdk-fbsvc@feelin-pay-a345a.iam.gserviceaccount.com';
 
   final GoogleSignIn _googleSignIn;
 
   GoogleDriveService(this._googleSignIn);
 
-  /// Inicializa la carpeta de reportes y la comparte con el bot
+  /// Inicializa la carpeta de reportes PRIVADA del usuario
+  /// IMPORTANTE: Solo el usuario tiene acceso a esta carpeta
+  /// Ningún servicio externo, bot o backend puede acceder a los datos
   Future<String?> setupReportFolder() async {
     try {
       final httpClient = await _googleSignIn.authenticatedClient();
@@ -26,7 +26,7 @@ class GoogleDriveService {
       final driveApi = drive.DriveApi(httpClient);
 
       // 1. Buscar si la carpeta ya existe
-      debugPrint('🔍 [DRIVE SERVICE] Buscando carpeta: $_folderName');
+      debugPrint('🔍 [DRIVE SERVICE] Buscando carpeta privada: $_folderName');
       final query =
           "name = '$_folderName' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
       final folderList = await driveApi.files.list(
@@ -37,10 +37,10 @@ class GoogleDriveService {
       String? folderId;
       if (folderList.files != null && folderList.files!.isNotEmpty) {
         folderId = folderList.files!.first.id;
-        debugPrint('✅ [DRIVE SERVICE] Carpeta encontrada: $folderId');
+        debugPrint('✅ [DRIVE SERVICE] Carpeta privada encontrada: $folderId');
       } else {
         // 2. Crear la carpeta si no existe
-        debugPrint('🆕 [DRIVE SERVICE] Creando nueva carpeta...');
+        debugPrint('🆕 [DRIVE SERVICE] Creando nueva carpeta PRIVADA...');
         final folderMetadata = drive.File()
           ..name = _folderName
           ..mimeType = 'application/vnd.google-apps.folder';
@@ -50,22 +50,10 @@ class GoogleDriveService {
           $fields: 'id',
         );
         folderId = createdFolder.id;
-        debugPrint('✅ [DRIVE SERVICE] Carpeta creada: $folderId');
-      }
-
-      if (folderId != null) {
-        // 3. Compartir con la cuenta de servicio (Editor)
+        debugPrint('✅ [DRIVE SERVICE] Carpeta PRIVADA creada: $folderId');
         debugPrint(
-          '🤝 [DRIVE SERVICE] Compartiendo con bot: $_serviceAccountEmail',
+          '🔒 [DRIVE SERVICE] Solo el usuario tiene acceso a esta carpeta',
         );
-        await driveApi.permissions.create(
-          drive.Permission()
-            ..type = 'user'
-            ..role = 'writer'
-            ..emailAddress = _serviceAccountEmail,
-          folderId,
-        );
-        debugPrint('✅ [DRIVE SERVICE] Compartido exitosamente');
       }
 
       return folderId;

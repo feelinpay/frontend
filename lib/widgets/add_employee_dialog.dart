@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import '../core/design/design_system.dart';
-import '../services/user_management_service.dart';
+import '../services/employee_service.dart';
 import '../models/employee_model.dart';
 import '../views/country_picker.dart';
 import '../widgets/snackbar_helper.dart';
@@ -25,7 +25,7 @@ class _AddEmployeeDialogState extends State<AddEmployeeDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _userService = UserManagementService();
+  final _employeeService = EmployeeService();
 
   final _phoneFormatter = MaskTextInputFormatter(
     mask: '### ### ###',
@@ -79,8 +79,7 @@ class _AddEmployeeDialogState extends State<AddEmployeeDialog> {
         '',
       );
 
-      final response = await _userService.createEmployeeForOwner(
-        widget.ownerId,
+      final response = await _employeeService.createEmployee(
         nombre: _nameController.text,
         telefono: '${_selectedCountry.dialCode}$cleanPhone',
       );

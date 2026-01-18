@@ -41,14 +41,14 @@ class UnifiedBackgroundService {
     await service.configure(
       androidConfiguration: AndroidConfiguration(
         onStart: onStart,
-        autoStart: false,
+        autoStart: true,
         isForegroundMode: true,
         notificationChannelId:
             'feelin_pay_foreground', // Debe coincidir con el creado arriba
         initialNotificationTitle: 'Feelin Pay',
         initialNotificationContent: 'Escuchando notificaciones de pago',
         foregroundServiceNotificationId: 888,
-        autoStartOnBoot: false, // Control manual mejor
+        autoStartOnBoot: true, // Habilitar inicio automático
         foregroundServiceTypes: [AndroidForegroundType.dataSync],
       ),
       iosConfiguration: IosConfiguration(

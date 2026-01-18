@@ -58,6 +58,8 @@ dependencies:
   mask_text_input_formatter: ^2.9.0
   googleapis: ^13.1.0
   extension_google_sign_in_as_googleapis_auth: ^2.0.12
+  android_intent_plus: ^6.0.0
+  device_info_plus: ^12.3.0
 
   # Bridge Mode Dependencies
 

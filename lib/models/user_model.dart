@@ -10,12 +10,10 @@ class UserModel {
   final String? rolNombre; // Nombre del rol desde la relación
   final String? imagen; // NEW: Profile image URL
   final bool activo;
-  final bool enPeriodoPrueba;
+
   final DateTime? fechaInicioPrueba; // NEW
   final DateTime? fechaFinPrueba; // NEW
-  final int diasPruebaRestantes;
-  final bool emailVerificado;
-  final DateTime? emailVerificadoAt;
+
   final String? googleDriveFolderId;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -31,12 +29,9 @@ class UserModel {
     this.rolNombre,
     this.imagen,
     required this.activo,
-    required this.enPeriodoPrueba,
     this.fechaInicioPrueba,
     this.fechaFinPrueba,
-    required this.diasPruebaRestantes,
-    required this.emailVerificado,
-    this.emailVerificadoAt,
+
     this.googleDriveFolderId,
     required this.createdAt,
     required this.updatedAt,
@@ -54,21 +49,6 @@ class UserModel {
     final fechaFin = json['fechaFinPrueba'] != null
         ? DateTime.parse(json['fechaFinPrueba'])
         : null;
-
-    // Calculate trial status if not provided
-    bool enPrueba = json['enPeriodoPrueba'] ?? false;
-    int diasRestantes = json['diasPruebaRestantes'] ?? 0;
-
-    if (fechaFin != null && json['enPeriodoPrueba'] == null) {
-      final now = DateTime.now();
-      if (fechaFin.isAfter(now)) {
-        enPrueba = true;
-        diasRestantes = fechaFin.difference(now).inDays;
-      } else {
-        enPrueba = false; // Expired
-        diasRestantes = 0;
-      }
-    }
 
     // Parse permissions safely
     List<Permission> parsedPermissions = [];
@@ -95,14 +75,9 @@ class UserModel {
 
       imagen: json['imagen'],
       activo: json['activo'] ?? false,
-      enPeriodoPrueba: enPrueba,
       fechaInicioPrueba: fechaInicio,
       fechaFinPrueba: fechaFin,
-      diasPruebaRestantes: diasRestantes,
-      emailVerificado: json['emailVerificado'] ?? false,
-      emailVerificadoAt: json['emailVerificadoAt'] != null
-          ? DateTime.parse(json['emailVerificadoAt'])
-          : null,
+
       googleDriveFolderId: json['googleDriveFolderId'], // Parse nullable
       createdAt: DateTime.parse(
         json['createdAt'] ?? DateTime.now().toIso8601String(),
@@ -128,12 +103,9 @@ class UserModel {
       'rolNombre': rolNombre,
       'imagen': imagen,
       'activo': activo,
-      'enPeriodoPrueba': enPeriodoPrueba,
       'fechaInicioPrueba': fechaInicioPrueba?.toIso8601String(),
-      'fechaFinPrueba': fechaFinPrueba?.toIso8601String(), // NEW
-      'diasPruebaRestantes': diasPruebaRestantes,
-      'emailVerificado': emailVerificado,
-      'emailVerificadoAt': emailVerificadoAt?.toIso8601String(),
+      'fechaFinPrueba': fechaFinPrueba?.toIso8601String(),
+
       'googleDriveFolderId': googleDriveFolderId,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
@@ -152,12 +124,9 @@ class UserModel {
     String? rolNombre,
     String? imagen,
     bool? activo,
-    bool? enPeriodoPrueba,
     DateTime? fechaInicioPrueba,
-    DateTime? fechaFinPrueba, // NEW
-    int? diasPruebaRestantes,
-    bool? emailVerificado,
-    DateTime? emailVerificadoAt,
+    DateTime? fechaFinPrueba,
+
     String? googleDriveFolderId,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -173,12 +142,9 @@ class UserModel {
       rolNombre: rolNombre ?? this.rolNombre,
       imagen: imagen ?? this.imagen,
       activo: activo ?? this.activo,
-      enPeriodoPrueba: enPeriodoPrueba ?? this.enPeriodoPrueba,
       fechaInicioPrueba: fechaInicioPrueba ?? this.fechaInicioPrueba,
-      fechaFinPrueba: fechaFinPrueba ?? this.fechaFinPrueba, // NEW
-      diasPruebaRestantes: diasPruebaRestantes ?? this.diasPruebaRestantes,
-      emailVerificado: emailVerificado ?? this.emailVerificado,
-      emailVerificadoAt: emailVerificadoAt ?? this.emailVerificadoAt,
+      fechaFinPrueba: fechaFinPrueba ?? this.fechaFinPrueba,
+
       googleDriveFolderId: googleDriveFolderId ?? this.googleDriveFolderId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -197,6 +163,19 @@ class UserModel {
   }
 
   /// Verificar si está en período de prueba
+  bool get enPeriodoPrueba {
+    if (fechaFinPrueba == null) return false;
+    return fechaFinPrueba!.isAfter(DateTime.now());
+  }
+
+  /// Días restantes de prueba
+  int get diasPruebaRestantes {
+    if (fechaFinPrueba == null) return 0;
+    final diff = fechaFinPrueba!.difference(DateTime.now()).inDays;
+    return diff > 0 ? diff : 0;
+  }
+
+  /// Verificar si está en período de prueba (alias para compatibilidad)
   bool get isInTrial => enPeriodoPrueba && diasPruebaRestantes > 0;
 
   /// Verificar si la licencia está activa (ahora basado en membresía)

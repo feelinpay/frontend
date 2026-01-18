@@ -4,15 +4,8 @@ import 'api_service.dart';
 
 /// Servicio principal de Feelin Pay que integra todas las funcionalidades
 class FeelinPayService {
-  // ========================================
-  // NOTA: Métodos de autenticación (login, logout, perfil)
-  // han sido migrados a AuthService.
-  // Usar AuthService() para esas operaciones.
-  // ========================================
-
   /// ===== GESTIÓN DE EMPLEADOS =====
 
-  /// Crear empleado
   /// Crear empleado
   static Future<Map<String, dynamic>> crearEmpleado({
     required String propietarioId,
@@ -438,81 +431,6 @@ class FeelinPayService {
     }
   }
 
-  // ==================== MÉTODOS OTP ====================
-
-  /// Verificar código OTP
-  /// Verificar código OTP
-  static Future<Map<String, dynamic>> verificarCodigoOTP(
-    String userId,
-    String codigo,
-  ) async {
-    try {
-      final response = await ApiService().post<Map<String, dynamic>>(
-        '/otp/verificar-codigo',
-        data: {'usuarioId': userId, 'codigo': codigo},
-      );
-
-      if (response.isSuccess) {
-        // Nota: ApiService puede retornar mensaje en data o solo status
-        final message =
-            response.data?['message'] ?? 'Código verificado correctamente';
-        return {'success': true, 'message': message};
-      } else {
-        return {'success': false, 'message': response.message};
-      }
-    } catch (e) {
-      return {'success': false, 'message': 'Error de conexión: $e'};
-    }
-  }
-
-  /// Reenviar código OTP
-  static Future<Map<String, dynamic>> reenviarCodigoOTP(String email) async {
-    try {
-      // Limpiar email antes de enviar
-      final emailLimpio = email.trim().toLowerCase();
-
-      final response = await ApiService().post<Map<String, dynamic>>(
-        '/public/auth/resend-otp',
-        data: {'email': emailLimpio, 'tipo': 'EMAIL_VERIFICATION'},
-      );
-
-      if (response.isSuccess) {
-        final message =
-            response.data?['message'] ?? 'Código reenviado correctamente';
-        return {'success': true, 'message': message};
-      } else {
-        return {'success': false, 'message': response.message};
-      }
-    } catch (e) {
-      return {'success': false, 'message': 'Error de conexión: $e'};
-    }
-  }
-
-  /// Solicitar recuperación de contraseña
-  static Future<Map<String, dynamic>> solicitarRecuperacionPassword(
-    String email,
-  ) async {
-    try {
-      // Limpiar email antes de enviar
-      final emailLimpio = email.trim().toLowerCase();
-
-      final response = await ApiService().post<Map<String, dynamic>>(
-        '/public/auth/forgot-password',
-        data: {'email': emailLimpio},
-      );
-
-      if (response.isSuccess) {
-        final message =
-            response.data?['message'] ?? 'Código de recuperación enviado';
-        return {'success': true, 'message': message};
-      } else {
-        return {'success': false, 'message': response.message};
-      }
-    } catch (e) {
-      return {'success': false, 'message': 'Error de conexión: $e'};
-    }
-  }
-
   // Gestión de usuarios
   static Future<Map<String, dynamic>> obtenerUsuarios({
     String busqueda = '',
@@ -769,77 +687,6 @@ class FeelinPayService {
       if (response.isSuccess) {
         final message =
             response.data?['message'] ?? 'Teléfono actualizado correctamente';
-        return {'success': true, 'message': message};
-      } else {
-        return {'success': false, 'error': response.message};
-      }
-    } catch (e) {
-      return {'success': false, 'error': 'Error de conexión: $e'};
-    }
-  }
-
-  // Cambiar contraseña del usuario
-  static Future<Map<String, dynamic>> cambiarPassword(
-    String passwordActual,
-    String passwordNueva,
-  ) async {
-    try {
-      final response = await ApiService().put<Map<String, dynamic>>(
-        '/profile/profile/password',
-        data: {
-          'passwordActual': passwordActual,
-          'passwordNueva': passwordNueva,
-        },
-      );
-
-      if (response.isSuccess) {
-        final message =
-            response.data?['message'] ?? 'Contraseña actualizada correctamente';
-        return {'success': true, 'message': message};
-      } else {
-        return {'success': false, 'error': response.message};
-      }
-    } catch (e) {
-      return {'success': false, 'error': 'Error de conexión: $e'};
-    }
-  }
-
-  // Solicitar cambio de email
-  static Future<Map<String, dynamic>> solicitarCambioEmail(
-    String nuevoEmail,
-  ) async {
-    try {
-      final response = await ApiService().post<Map<String, dynamic>>(
-        '/profile/profile/email/request',
-        data: {'nuevoEmail': nuevoEmail},
-      );
-
-      if (response.isSuccess) {
-        final message =
-            response.data?['message'] ??
-            'Código de verificación enviado al nuevo email';
-        return {'success': true, 'message': message};
-      } else {
-        return {'success': false, 'error': response.message};
-      }
-    } catch (e) {
-      return {'success': false, 'error': 'Error de conexión: $e'};
-    }
-  }
-
-  // Confirmar cambio de email con OTP
-  static Future<Map<String, dynamic>> confirmarCambioEmail(
-    String codigo,
-  ) async {
-    try {
-      final response = await ApiService().post<Map<String, dynamic>>(
-        '/profile/profile/email/confirm',
-        data: {'codigo': codigo},
-      );
-
-      if (response.isSuccess) {
-        final message =
-            response.data?['message'] ?? 'Email actualizado correctamente';
         return {'success': true, 'message': message};
       } else {
         return {'success': false, 'error': response.message};

@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     
     <!-- Permisos esenciales -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -17,6 +18,9 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" /> <!-- Requerido para alarmas precisas en Android 12+ -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" /> <!-- Opcional: Para mayor prioridad visual si se requiere -->
     
     <!-- Permisos para Descargas (CSV) -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
@@ -67,13 +71,12 @@
             </intent-filter>
         </service>
 
-        <!-- Servicio unificado background (CRÍTICO para Android 14+) -->
+        <!-- Servicio de fondo para flutter_background_service -->
         <service
             android:name="id.flutter.flutter_background_service.BackgroundService"
             android:foregroundServiceType="dataSync"
-            android:enabled="true"
-            android:exported="true"
-            android:permission="android.permission.FOREGROUND_SERVICE" />
+            android:exported="false"
+            tools:replace="android:exported" />
         
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"

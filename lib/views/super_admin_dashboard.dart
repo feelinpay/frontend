@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'; // Para kDebugMode
+import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import '../core/design/design_system.dart';
 import '../controllers/auth_controller.dart';
@@ -383,6 +384,42 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               color: const Color(0xFFF59E0B),
               onTap: () =>
                   Navigator.pushNamed(context, '/permissions-management'),
+            ),
+            _buildShortcutCard(
+              title: 'Mi carpeta de Google Drive',
+              icon: Icons.add_to_drive,
+              color: const Color(0xFF4285F4), // Google Blue
+              onTap: () async {
+                final authController = Provider.of<AuthController>(
+                  context,
+                  listen: false,
+                );
+                final user = authController.currentUser;
+                final urlStr = user?.googleDriveFolderUrl;
+
+                if (urlStr != null && urlStr.isNotEmpty) {
+                  final url = Uri.parse(urlStr);
+                  try {
+                    await launchUrl(url, mode: LaunchMode.externalApplication);
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('No se pudo abrir el enlace: $e'),
+                          backgroundColor: DesignSystem.errorColor,
+                        ),
+                      );
+                    }
+                  }
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('No tienes una carpeta asignada aún.'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
+              },
             ),
           ],
         ),

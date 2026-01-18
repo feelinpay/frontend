@@ -25,12 +25,6 @@ class AppConfig {
   static const int minPhoneLength = 9;
   static const int maxPhoneLength = 15;
 
-  // Configuración de OTP
-  static const int otpLength = 6;
-  static const Duration otpExpirationMinutes = Duration(minutes: 10);
-  static const int maxOtpAttemptsPerDay = 5;
-  static const int maxOtpVerificationAttempts = 3;
-
   // Configuración de membresías
   static const int trialDays = 3;
   static const double monthlyMembershipPrice = 29.90;
@@ -55,7 +49,7 @@ class AppConfig {
   static const String ownerEndpoint = '/owner';
   static const String superAdminEndpoint = '/super-admin';
   static const String dashboardEndpoint = '/dashboard';
-  static const String otpEndpoint = '/otp';
+
   static const String paymentsEndpoint = '/payments';
   static const String membresiasEndpoint = '/membresias';
 

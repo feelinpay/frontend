@@ -6,6 +6,7 @@ import '../controllers/system_controller.dart';
 import '../core/design/design_system.dart';
 import '../core/widgets/responsive_widgets.dart';
 import '../services/payment_notification_service.dart';
+import '../services/auto_start_service.dart'; // NEW
 import '../widgets/app_header.dart';
 
 class AndroidPermissionsScreen extends StatefulWidget {
@@ -24,37 +25,61 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
   bool _notificationListenerGranted = false;
   bool _isChecking = true; // Empieza en true para evitar flicker inicial
   bool _isNavigating = false; // Guard para evitar navegación doble
+  bool _isCheckingPermissions =
+      false; // Guard para evitar ejecuciones concurrentes
+  bool _showAutoStart = false;
+  _AppLifecycleObserver? _lifecycleObserver;
 
   @override
   void initState() {
     super.initState();
+    _initAutoStartCheck();
     // Solo verificar, NO navegar automáticamente (Respetar deseo del usuario)
     _checkPermissions();
     _setupAppLifecycleListener();
   }
 
-  Future<void> _checkPermissions() async {
-    final Map<Permission, PermissionStatus> statuses = {};
-
-    statuses[Permission.sms] = await Permission.sms.status;
-    statuses[Permission.notification] = await Permission.notification.status;
-
-    final batteryStatus = await Permission.ignoreBatteryOptimizations.status;
-    statuses[Permission.ignoreBatteryOptimizations] = batteryStatus;
-
-    debugPrint('🔋 Estado Batería: $batteryStatus');
-    debugPrint(
-      '📱 Listener Granted: ${await PaymentNotificationService.hasPermission}',
-    );
-
-    final listenerGranted = await PaymentNotificationService.hasPermission;
-
+  Future<void> _initAutoStartCheck() async {
+    final supported = await AutoStartService.isManufacturerSupported();
     if (mounted) {
       setState(() {
-        _permissions = statuses;
-        _notificationListenerGranted = listenerGranted;
-        _isChecking = false;
+        _showAutoStart = supported;
       });
+    }
+  }
+
+  Future<void> _checkPermissions() async {
+    if (_isCheckingPermissions) return;
+    _isCheckingPermissions = true;
+
+    try {
+      final results = await Future.wait([
+        Permission.sms.status,
+        Permission.notification.status,
+        Permission.ignoreBatteryOptimizations.status,
+        Permission.scheduleExactAlarm.status,
+        Permission.systemAlertWindow.status,
+        PaymentNotificationService.hasPermission,
+      ]);
+
+      if (mounted) {
+        setState(() {
+          _permissions = {
+            Permission.sms: results[0] as PermissionStatus,
+            Permission.notification: results[1] as PermissionStatus,
+            Permission.ignoreBatteryOptimizations:
+                results[2] as PermissionStatus,
+            Permission.scheduleExactAlarm: results[3] as PermissionStatus,
+            Permission.systemAlertWindow: results[4] as PermissionStatus,
+          };
+          _notificationListenerGranted = results[5] as bool;
+          _isChecking = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ Error verificando permisos: $e');
+    } finally {
+      _isCheckingPermissions = false;
     }
   }
 
@@ -64,19 +89,32 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
         _permissions[Permission.notification]?.isGranted ?? false;
     final batteryGranted =
         _permissions[Permission.ignoreBatteryOptimizations]?.isGranted ?? false;
+    final exactAlarmGranted =
+        _permissions[Permission.scheduleExactAlarm]?.isGranted ?? false;
+    final systemAlertGranted =
+        _permissions[Permission.systemAlertWindow]?.isGranted ?? false;
 
     return smsGranted &&
         notificationGranted &&
         _notificationListenerGranted &&
-        batteryGranted;
+        batteryGranted &&
+        exactAlarmGranted &&
+        systemAlertGranted;
+    // Note: AutoStart is optional/advanced as it cannot be reliably detected
   }
 
   Future<void> _requestPermissions() async {
-    // 1. Solicitar permisos básicos
-    await [Permission.sms, Permission.notification].request();
-    await _checkPermissions();
+    // 1. Permisos básicos (SMS y Notificaciones)
+    final smsStatus = await Permission.sms.status;
+    final notifStatus = await Permission.notification.status;
 
-    // 2. Verificar Listener (Si falta, ir a settings)
+    if (smsStatus.isDenied || notifStatus.isDenied) {
+      await [Permission.sms, Permission.notification].request();
+      await _checkPermissions();
+      return; // Detenerse aquí para que el usuario procese el diálogo del sistema
+    }
+
+    // 2. Verificar Listener (Acceso a Notificaciones)
     if (!_notificationListenerGranted) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -87,24 +125,49 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
         );
       }
       await PaymentNotificationService.openSettings();
-      // No retornamos aquí para permitir que vea/pida la 4ta opción después si pulsa de nuevo
+      return; // Detenerse aquí, el usuario sale de la app a Ajustes
     }
 
-    // 3. Batería (La famosa 4ta opción)
+    // 3. Batería (Optimización)
     if (await Permission.ignoreBatteryOptimizations.isDenied) {
       await Permission.ignoreBatteryOptimizations.request();
+      await _checkPermissions();
+      return; // Detenerse aquí para procesar el diálogo de batería
     }
+
+    // 4. Alarmas Exactas (Android 12+)
+    if (await Permission.scheduleExactAlarm.isDenied) {
+      await Permission.scheduleExactAlarm.request();
+      await _checkPermissions();
+      return;
+    }
+
+    // 5. Mostrar sobre otras Apps
+    if (await Permission.systemAlertWindow.isDenied) {
+      await Permission.systemAlertWindow.request();
+      await _checkPermissions();
+      return;
+    }
+
+    // Si llegamos aquí, ya tiene lo básico
     await _checkPermissions();
   }
 
   void _setupAppLifecycleListener() {
-    WidgetsBinding.instance.addObserver(
-      _AppLifecycleObserver(() async {
-        if (mounted) {
-          await _checkPermissions();
-        }
-      }),
-    );
+    _lifecycleObserver = _AppLifecycleObserver(() async {
+      if (mounted) {
+        await _checkPermissions();
+      }
+    });
+    WidgetsBinding.instance.addObserver(_lifecycleObserver!);
+  }
+
+  @override
+  void dispose() {
+    if (_lifecycleObserver != null) {
+      WidgetsBinding.instance.removeObserver(_lifecycleObserver!);
+    }
+    super.dispose();
   }
 
   Future<void> _navigateToDashboard() async {
@@ -277,18 +340,38 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
         isRequired: true,
       ),
       _PermissionData(
-        icon: Icons.battery_alert,
-        title: 'Segundo Plano',
-        permission: Permission.ignoreBatteryOptimizations,
-        isRequired: true,
-      ),
-      _PermissionData(
         icon: Icons.notifications_active,
         title: 'Acceso a Notificaciones',
         permission: null,
         isGrantedOverride: _notificationListenerGranted,
         isRequired: true,
       ),
+      _PermissionData(
+        icon: Icons.battery_alert,
+        title: 'Segundo Plano (Sin restricciones)',
+        permission: Permission.ignoreBatteryOptimizations,
+        isRequired: true,
+      ),
+      _PermissionData(
+        icon: Icons.access_alarm,
+        title: 'Alarmas Exactas (Android 12+)',
+        permission: Permission.scheduleExactAlarm,
+        isRequired: true,
+      ),
+      _PermissionData(
+        icon: Icons.layers,
+        title: 'Mostrar sobre otras Apps',
+        permission: Permission.systemAlertWindow,
+        isRequired: true,
+      ),
+      if (_showAutoStart)
+        _PermissionData(
+          icon: Icons.settings_power,
+          title: 'Inicio Automático (Xiaomi/Samsung...)', // Updated title
+          permission: null,
+          isAutoStart: true,
+          isRequired: false, // Cannot detect
+        ),
     ];
 
     return Column(
@@ -313,6 +396,8 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
           await p.permission!.request();
         } else if (p.permission != null) {
           await p.permission!.request();
+        } else if (p.isAutoStart == true) {
+          await AutoStartService.openAutoStartSettings();
         } else if (p.permission == null && p.title.contains('Notificaciones')) {
           await PaymentNotificationService.openSettings();
         }
@@ -430,6 +515,7 @@ class _PermissionData {
   final String title;
   final Permission? permission;
   final bool? isGrantedOverride;
+  final bool? isAutoStart;
   final bool isRequired;
 
   _PermissionData({
@@ -437,6 +523,7 @@ class _PermissionData {
     required this.title,
     this.permission,
     this.isGrantedOverride,
+    this.isAutoStart,
     required this.isRequired,
   });
 }

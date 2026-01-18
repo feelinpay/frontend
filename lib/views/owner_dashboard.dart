@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../core/design/design_system.dart';
 import '../controllers/auth_controller.dart';
 import '../widgets/three_dots_menu_widget.dart';
@@ -8,7 +9,6 @@ import '../widgets/admin_drawer.dart';
 import '../core/widgets/responsive_widgets.dart';
 import '../services/unified_background_service.dart';
 import '../services/sms_service.dart';
-import '../services/api_service.dart';
 
 class OwnerDashboard extends StatefulWidget {
   const OwnerDashboard({super.key});
@@ -83,7 +83,6 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
           'totalEmpleados': 0,
           'empleadosActivos': 0,
           'empleadosInactivos': 0,
-          'pagosDelMes': 0,
         };
         _isLoading = false;
       });
@@ -92,67 +91,6 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
         _error = 'Error al cargar estadísticas: $e';
         _isLoading = false;
       });
-    }
-  }
-
-  // TEST FUNCTION for Google Sheets
-  Future<void> _simularPagoTest() async {
-    final authController = context.read<AuthController>();
-    final user = authController.currentUser;
-
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error: No usuario autenticado')),
-      );
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('⏳ Enviando pago de prueba...')),
-    );
-
-    try {
-      final apiService = ApiService();
-      // Using /yape endpoint directly to simulate a notification
-      final response = await apiService.post(
-        '/payments/yape',
-        data: {
-          'usuarioId': user.id,
-          'nombrePagador': 'TEST USER - ${DateTime.now().second}',
-          'monto': 100.0,
-          'codigoSeguridad':
-              'TEST_CODE', // Only needed for Yape but good to have
-          'medioDePago': 'Yape',
-          'testMode': true, // Optional flag if backend wants it
-        },
-      );
-
-      if (response.isSuccess) {
-        // ignore: use_build_context_synchronously
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Éxito: Revisa tu Google Drive!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 4),
-          ),
-        );
-      } else {
-        // ignore: use_build_context_synchronously
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Error Backend: ${response.message}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      // ignore: use_build_context_synchronously
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Error Local: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
     }
   }
 
@@ -249,7 +187,6 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
     final totalEmpleados = stats['totalEmpleados'] ?? 0;
     final empleadosActivos = stats['empleadosActivos'] ?? 0;
     final empleadosInactivos = stats['empleadosInactivos'] ?? 0;
-    final pagosDelMes = stats['pagosDelMes'] ?? 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -284,40 +221,6 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
                 icon: Icons.check_circle,
                 color: const Color(0xFF22C55E),
                 subtitle: '$empleadosInactivos inactivos',
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: DesignSystem.spacingM),
-
-        // Segunda fila: Pagos
-        Row(
-          children: [
-            Expanded(
-              child: _buildStatCard(
-                title: 'Pagos del Mes',
-                value: pagosDelMes.toString(),
-                icon: Icons.payment,
-                color: const Color(0xFF3B82F6),
-                subtitle: 'Transacciones',
-              ),
-            ),
-            const SizedBox(width: DesignSystem.spacingM),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(DesignSystem.spacingM),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(DesignSystem.radiusL),
-                  boxShadow: DesignSystem.shadowM,
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.add_circle_outline,
-                    size: 48,
-                    color: DesignSystem.textSecondary,
-                  ),
-                ),
               ),
             ),
           ],
@@ -418,23 +321,40 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
               onTap: () => Navigator.pushNamed(context, '/employee-management'),
             ),
             _buildShortcutCard(
-              title: 'Horarios y Jornadas',
-              icon: Icons.schedule,
-              color: const Color(0xFF3B82F6),
-              onTap: () => Navigator.pushNamed(context, '/schedule-management'),
-            ),
-            _buildShortcutCard(
-              title: 'Gestión de Permisos',
-              icon: Icons.security,
-              color: const Color(0xFFF59E0B),
-              onTap: () =>
-                  Navigator.pushNamed(context, '/permissions-management'),
-            ),
-            _buildShortcutCard(
-              title: 'Simular Pago Test',
-              icon: Icons.bug_report,
-              color: DesignSystem.primaryColor,
-              onTap: _simularPagoTest,
+              title: 'Mi carpeta de Google Drive',
+              icon: Icons.add_to_drive,
+              color: const Color(0xFF4285F4), // Google Blue
+              onTap: () async {
+                final authController = Provider.of<AuthController>(
+                  context,
+                  listen: false,
+                );
+                final user = authController.currentUser;
+                final urlStr = user?.googleDriveFolderUrl;
+
+                if (urlStr != null && urlStr.isNotEmpty) {
+                  final url = Uri.parse(urlStr);
+                  try {
+                    await launchUrl(url, mode: LaunchMode.externalApplication);
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('No se pudo abrir el enlace: $e'),
+                          backgroundColor: DesignSystem.errorColor,
+                        ),
+                      );
+                    }
+                  }
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('No tienes una carpeta asignada aún.'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
+              },
             ),
           ],
         ),

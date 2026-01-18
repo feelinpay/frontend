@@ -42,43 +42,6 @@ class AuthController with ChangeNotifier {
   }
 
   // ========================================
-  // REGISTRO
-  // ========================================
-
-  /// Registrar nuevo usuario
-  Future<bool> register({
-    required String nombre,
-    required String telefono,
-    required String email,
-    required String password,
-    required String confirmPassword,
-  }) async {
-    _setLoading(true);
-    _clearError();
-
-    try {
-      final response = await _authService.register(
-        nombre: nombre,
-        telefono: telefono,
-        email: email,
-        password: password,
-        confirmPassword: confirmPassword,
-      );
-
-      if (response.success) {
-        _setLoading(false);
-        return true;
-      } else {
-        _setError(response.message);
-        return false;
-      }
-    } catch (e) {
-      _setError('Error en registro: $e');
-      return false;
-    }
-  }
-
-  // ========================================
   // LOGIN CON GOOGLE
   // ========================================
 
@@ -94,9 +57,6 @@ class AuthController with ChangeNotifier {
         _currentUser = response.data;
         _setLoading(false);
         debugPrint('✅ Login exitoso. Usuario: ${_currentUser?.email}');
-        debugPrint(
-          '📂 Drive Folder ID: ${_currentUser?.googleDriveFolderId ?? "NO ASIGNADO"}',
-        );
         notifyListeners();
         return true;
       } else {
@@ -105,42 +65,6 @@ class AuthController with ChangeNotifier {
       }
     } catch (e) {
       _setError('Error en Google Sign-In: $e');
-      return false;
-    }
-  }
-
-  // ========================================
-  // LOGIN CON EMAIL
-  // ========================================
-
-  /// Iniciar sesión con email y contraseña
-  Future<bool> login({required String email, required String password}) async {
-    _setLoading(true);
-    _clearError();
-
-    try {
-      final response = await _authService.login(
-        email: email,
-        password: password,
-      );
-
-      if (response.success && response.data != null) {
-        if (response.data!.requiresOTP) {
-          _setLoading(false);
-          return false; // Requiere OTP
-        } else if (response.data!.token != null &&
-            response.data!.user != null) {
-          _currentUser = response.data!.user;
-          _setLoading(false);
-          notifyListeners();
-          return true;
-        }
-      }
-
-      _setError(response.message);
-      return false;
-    } catch (e) {
-      _setError('Error en login: $e');
       return false;
     }
   }

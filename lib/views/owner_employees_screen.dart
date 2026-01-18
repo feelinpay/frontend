@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/design/design_system.dart';
-import '../services/user_management_service.dart';
+import '../services/employee_service.dart';
 import '../models/user_model.dart';
 import '../models/employee_model.dart';
 import '../widgets/snackbar_helper.dart';
@@ -22,7 +22,7 @@ class OwnerEmployeesScreen extends StatefulWidget {
 
 class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final UserManagementService _userService = UserManagementService();
+  final EmployeeService _employeeService = EmployeeService();
 
   List<EmployeeModel> _employees = [];
   List<EmployeeModel> _filteredEmployees = [];
@@ -44,20 +44,13 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen> {
     super.dispose();
   }
 
-  // ... (previous methods like _loadEmployees remain same, skipping for brevity in this replacement block if possible, but replace_file_content requires contiguous block.
-  // Wait, I should target specific blocks. I'll split this into two replacements if possible, but the tool allows single contiguous block.
-  // I will replace the class definition to remove TickerProviderStateMixin and then the build method.)
-
-  // Actually, I can use multi_replace since cleanups are scattered.
-  // Let's use multi_replace for this.
-
   Future<void> _loadEmployees() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
-      final response = await _userService.getEmployeesByOwner(widget.owner.id);
+      final response = await _employeeService.getEmployees();
 
       if (response.isSuccess && response.data != null) {
         setState(() {
@@ -173,11 +166,7 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen> {
     bool newState,
   ) async {
     try {
-      final response = await _userService.toggleEmployeeForOwner(
-        widget.owner.id,
-        employee.id,
-        newState,
-      );
+      final response = await _employeeService.toggleEmployeeStatus(employee.id);
       return response.isSuccess;
     } catch (e) {
       return false;
@@ -230,10 +219,7 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen> {
       SnackBarHelper.showLoading(context, 'Eliminando empleado...');
 
       try {
-        final response = await _userService.deleteEmployeeForOwner(
-          widget.owner.id,
-          employee.id,
-        );
+        final response = await _employeeService.deleteEmployee(employee.id);
 
         if (response.isSuccess) {
           setState(() {
@@ -533,11 +519,7 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen> {
 
     try {
       final newState = !employee.activo;
-      final response = await _userService.toggleEmployeeForOwner(
-        widget.owner.id,
-        employee.id,
-        newState,
-      );
+      final response = await _employeeService.toggleEmployeeStatus(employee.id);
 
       if (response.isSuccess) {
         setState(() {
