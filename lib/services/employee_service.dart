@@ -466,24 +466,6 @@ class EmployeeService {
       statusCode: response.statusCode,
     );
   }
-
-  // Métodos de compatibilidad (obsoletos)
-  Future<api_models.ApiResponse<Map<String, dynamic>>> createWorkSchedule({
-    required String employeeId,
-    required String diaSemana,
-    required String horaInicio,
-    required String horaFin,
-    bool activo = true,
-  }) async {
-    return api_models.ApiResponse(success: false, message: 'Obsoleto');
-  }
-
-  Future<api_models.ApiResponse<void>> deleteWorkSchedule(
-    String employeeId,
-    String scheduleId,
-  ) async {
-    return api_models.ApiResponse(success: false, message: 'Obsoleto');
-  }
 }
 
 // ========================================
