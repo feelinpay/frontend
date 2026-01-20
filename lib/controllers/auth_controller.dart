@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../services/payment_notification_service.dart';
+import '../services/unified_background_service.dart';
 
 class AuthController with ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -104,7 +105,15 @@ class AuthController with ChangeNotifier {
 
   /// Cerrar sesión
   Future<void> logout() async {
-    // 1. Detener escucha de pagos (SOFT STOP: No matar el servicio para evitar perder permisos)
+    // 1. Detener SERVICIO VISIBLE (Elimina notificación visual)
+    try {
+      debugPrint('⏹️ Deteniendo servicio visual (UnifiedBackgroundService)...');
+      await UnifiedBackgroundService.stop();
+    } catch (e) {
+      debugPrint('Error deteniendo UnifiedBackgroundService: $e');
+    }
+
+    // 2. Detener escucha de pagos LÓGICA (SOFT STOP: No matar el listener nativo para no perder permisos)
     try {
       await PaymentNotificationService.stopListening(killService: false);
     } catch (e) {
