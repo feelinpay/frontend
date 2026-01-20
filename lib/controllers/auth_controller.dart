@@ -104,9 +104,9 @@ class AuthController with ChangeNotifier {
 
   /// Cerrar sesión
   Future<void> logout() async {
-    // 1. Detener escucha de pagos (CRÍTICO: Evitar leak de servicio persistente)
+    // 1. Detener escucha de pagos (SOFT STOP: No matar el servicio para evitar perder permisos)
     try {
-      await PaymentNotificationService.stopListening();
+      await PaymentNotificationService.stopListening(killService: false);
     } catch (e) {
       debugPrint('Error deteniendo servicio en logout: $e');
     }

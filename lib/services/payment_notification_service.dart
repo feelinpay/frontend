@@ -96,11 +96,16 @@ class PaymentNotificationService {
     }
   }
 
-  static Future<void> stopListening() async {
+  static Future<void> stopListening({bool killService = true}) async {
     try {
-      await NotificationsListener.stopService();
       _isListening = false;
-      debugPrint('⏹️ Servicio detenido');
+      if (killService) {
+        await NotificationsListener.stopService();
+        debugPrint('⏹️ Servicio detenido totalmente (killService=true)');
+      } else {
+        debugPrint(
+            '⏸️ Servicio pausado (killService=false) - El listener sigue activo en Android pero ignorará eventos');
+      }
     } catch (e) {
       debugPrint('❌ Error deteniendo servicio: $e');
     }
