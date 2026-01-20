@@ -3,12 +3,12 @@ import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:googleapis_auth/googleapis_auth.dart' as auth;
-import 'package:shared_preferences/shared_preferences.dart'; // Keep this import as it's used by _saveAuthDataToPrefs
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/config/app_config.dart';
 import '../models/api_response.dart' as api_models;
 import '../models/user_model.dart';
 import 'api_service.dart';
-import 'google_drive_service.dart'; // Keep this import as it's used by setupReportFolder
+import 'google_drive_service.dart';
 import 'unified_background_service.dart';
 import 'payment_notification_service.dart';
 
@@ -23,7 +23,8 @@ class AuthService {
   final ApiService _apiService = ApiService();
 
   // Google Sign In v7 Instance
-  GoogleSignIn get _googleSignIn => GoogleSignIn.instance;
+  late GoogleSignIn _googleSignInInstance;
+  GoogleSignIn get _googleSignIn => _googleSignInInstance;
 
   // Local state management for currentUser (since v7 is stateless)
   GoogleSignInAccount? _currentUser;
@@ -38,21 +39,20 @@ class AuthService {
 
   Future<void> _initGoogleSignIn() async {
     try {
-      await _googleSignIn.initialize(
+      // Inicialización estándar para GoogleSignIn v7
+      _googleSignInInstance = GoogleSignIn(
         serverClientId: AppConfig.serverClientId,
-        // No scopes here in v7
+        scopes: _scopes, // Pre-define scopes here
       );
 
       // Listen to auth events to update local state
-      _googleSignIn.authenticationEvents.listen((event) {
-        if (event is GoogleSignInAuthenticationEventSignIn) {
-          _currentUser = event.user;
-          _currentUserController.add(_currentUser);
-        } else if (event is GoogleSignInAuthenticationEventSignOut) {
-          _currentUser = null;
-          _currentUserController.add(null);
-        }
+      _googleSignIn.onCurrentUserChanged.listen((GoogleSignInAccount? account) {
+        _currentUser = account;
+        _currentUserController.add(_currentUser);
       });
+
+      // Intentar recuperar usuario previo sin lanzar UI (si es posible)
+      await _googleSignIn.signInSilently();
     } catch (e) {
       debugPrint('Error initializing GoogleSignIn: $e');
     }
@@ -65,24 +65,21 @@ class AuthService {
       final token = await _apiService.getAuthToken();
 
       if (token != null && token.isNotEmpty) {
-        // Token is already set in ApiService, no need to call setAuthToken again
-
         // Intentar restaurar sesión de Google silenciosamente
-        // UPDATE: Commented out to prevent intrusive UI prompts on splash screen.
-        // User must explicitly click "Continue with Google" to trigger any Google auth flow.
-        /*
         try {
-          final account = await _googleSignIn
-              .attemptLightweightAuthentication();
+          // Usamos signInSilently para evitar prompts visuales.
+          final account = await _googleSignIn.signInSilently();
+
           if (account != null) {
             _currentUser = account;
             _currentUserController.add(account);
+
+            // CRÍTICO: Refrescar y guardar el token para el servicio de fondo
+            await _refreshBackgroundToken();
           }
         } catch (e) {
-          // Google sign-in failure shouldn't block app start if backend token works
           debugPrint('Silent Google Sign-In failed: $e');
         }
-        */
         return true;
       }
     } catch (e) {
@@ -104,28 +101,25 @@ class AuthService {
 
     try {
       // 1. Autenticar con Google (Identity)
-      // authenticate() in v7 returns a non-nullable Future<GoogleSignInAccount>
-      // and throws an exception if the sign in process is canceled or fails.
-      final GoogleSignInAccount account = await _googleSignIn.authenticate();
+      final GoogleSignInAccount? account = await _googleSignIn.signIn();
 
-      // 2. Verificar/Solicitar Scopes (Authorization)
-      // En v7, usamos authorizationClient
-      // 1.5. Request specific scopes if not granted (v7 incremental authorization)
-      // Use authorizationClient to check permissions
-      bool isAuthorized =
-          await _googleSignIn.authorizationClient.authorizationForScopes(
-            _scopes,
-          ) !=
-          null;
+      if (account == null) {
+        return api_models.ApiResponse<UserModel>(
+          success: false,
+          message: 'Inicio de sesión cancelado por el usuario',
+          statusCode: 400,
+        );
+      }
+
+      // 2. Verificar/Solicitar Scopes confirmados (Authorization)
+      bool isAuthorized = await _googleSignIn.canAccessScopes(_scopes);
 
       if (!isAuthorized) {
         debugPrint(
           '🔐 [AUTH SERVICE] Solicitando permisos adicionales (Scopes)...',
         );
         try {
-          // authorizeScopes returns the auth object with accessToken
-          await _googleSignIn.authorizationClient.authorizeScopes(_scopes);
-          isAuthorized = true;
+          isAuthorized = await _googleSignIn.requestScopes(_scopes);
         } catch (e) {
           debugPrint('⚠️ Error solicitando scopes: $e');
         }
@@ -140,22 +134,23 @@ class AuthService {
       }
 
       // 2. Obtener tokens
-      // Identity Token (for backend login)
-      // Note: In v7, authentication is a getter, not a Future
-      final GoogleSignInAuthentication auth = account.authentication;
+      final GoogleSignInAuthentication auth = await account.authentication;
       final String? idToken = auth.idToken;
+      final String? accessToken = auth.accessToken;
+      // Nota: auth.accessToken puede ser null en web/algunas versiones, pero en AuthCode flow usamos authorizationClient.
+      // Sin embargo, para background token simple, auth.accessToken suele bastar si requestScopes tuvo éxito.
 
-      // Access Token (for Google Drive API)
-      String? accessToken;
+      // Intentamos obtener token fresco
+      String? freshAccessToken = accessToken;
       try {
-        if (isAuthorized) {
-          // We already authorized earlier, but we need the token string explicitly
-          final authClient = await _googleSignIn.authorizationClient
-              .authorizeScopes(_scopes);
-          accessToken = authClient.accessToken;
+        final authClient = await getAuthenticatedClient();
+        if (authClient != null) {
+          freshAccessToken = authClient.credentials.accessToken.data;
         }
       } catch (e) {
-        debugPrint('⚠️ No se pudo obtener AccessToken para Drive: $e');
+        debugPrint(
+          'Debug: No se pudo refrescar token via authClient, usando el de auth object',
+        );
       }
 
       if (idToken == null) {
@@ -210,10 +205,10 @@ class AuthService {
           }
         }
 
-        if (accessToken != null) {
+        if (freshAccessToken != null) {
           try {
             final prefs = await SharedPreferences.getInstance();
-            await prefs.setString('bg_google_token', accessToken);
+            await prefs.setString('bg_google_token', freshAccessToken);
           } catch (e) {
             debugPrint('⚠️ Error cacheando token post-login: $e');
           }
@@ -235,12 +230,7 @@ class AuthService {
       );
     } catch (error) {
       debugPrint('❌ [AUTH SERVICE] Error detallado Google Sign In: $error');
-      // Fix strict type check for error.message
       String errorMessage = error.toString();
-      /* if (error is PlatformException) { // Requires 'flutter/services.dart' which is not imported
-         errorMessage = error.message ?? errorMessage;
-      } */
-
       return api_models.ApiResponse<UserModel>(
         success: false,
         message: 'Error iniciando sesión con Google: $errorMessage',
@@ -297,17 +287,14 @@ class AuthService {
   String? get currentToken => _apiService.authToken;
 
   Future<void> logout() async {
-    // 1. Detener servicio de fondo y notificaciones
     try {
       await UnifiedBackgroundService.stop();
-      // Asegurar que el listener nativo también se detenga
       await PaymentNotificationService.stopListening();
       debugPrint('🛑 Servicio de fondo detenido al cerrar sesión');
     } catch (e) {
       debugPrint('⚠️ Error al detener servicio en logout: $e');
     }
 
-    // 2. Cerrar sesión
     await _googleSignIn.signOut();
     await _apiService.logout();
   }
@@ -335,11 +322,11 @@ class AuthService {
     }
   }
 
-  // Helper to expose authenticated client (Manual implementation for v7 compatibility)
+  // Helper to expose authenticated client
   Future<auth.AuthClient?> getAuthenticatedClient() async {
     try {
-      final headers = await _googleSignIn.authorizationClient
-          .authorizationHeaders(_scopes);
+      // For v7, standard headers approach works if signed in
+      final headers = await _googleSignIn.currentUser?.authHeaders;
       if (headers == null) return null;
 
       final client = http.Client();
@@ -349,7 +336,6 @@ class AuthService {
           auth.AccessToken(
             'Bearer',
             headers['Authorization']!.split(' ').last,
-            // Expiry is not provided by authorizationHeaders, assume valid for short duration
             DateTime.now().add(const Duration(hours: 1)).toUtc(),
           ),
           null, // refreshToken
@@ -365,22 +351,34 @@ class AuthService {
   Future<String?> getGoogleAccessToken() async {
     try {
       GoogleSignInAccount? user = _currentUser;
-      user ??= await _googleSignIn.attemptLightweightAuthentication();
+      user ??= await _googleSignIn.signInSilently();
 
       if (user != null) {
-        // In v7, access token must be retrieved via authorizationClient
-        if (await _googleSignIn.authorizationClient.authorizationForScopes(
-              _scopes,
-            ) !=
-            null) {
-          final client = await _googleSignIn.authorizationClient
-              .authorizeScopes(_scopes);
-          return client.accessToken;
+        final authClient = await getAuthenticatedClient();
+        if (authClient != null) {
+          return authClient.credentials.accessToken.data;
         }
       }
     } catch (e) {
       debugPrint('⚠️ Error obteniendo Google Access Token: $e');
     }
     return null;
+  }
+
+  // Guardar token para el Background Service
+  Future<void> _refreshBackgroundToken() async {
+    try {
+      final authClient = await getAuthenticatedClient();
+      if (authClient != null) {
+        final credentials = authClient.credentials;
+        final accessToken = credentials.accessToken.data;
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('bg_google_token', accessToken);
+        debugPrint('✅ Token de Google refrescado y guardado para background');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error refrescando background token: $e');
+    }
   }
 }
