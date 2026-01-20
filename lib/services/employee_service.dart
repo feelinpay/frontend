@@ -105,14 +105,21 @@ class EmployeeService {
   Future<api_models.ApiResponse<EmployeeModel>> createEmployee({
     required String nombre,
     required String telefono,
+    String? ownerId,
   }) async {
+    final Map<String, dynamic> data = {
+      'nombre': nombre,
+      'telefono': telefono,
+      'activo': true, // Campo requerido por el backend
+    };
+
+    if (ownerId != null && ownerId.isNotEmpty) {
+      data['ownerId'] = ownerId;
+    }
+
     final response = await _apiService.post<Map<String, dynamic>>(
       '${AppConfig.ownerEndpoint}/employees',
-      data: {
-        'nombre': nombre,
-        'telefono': telefono,
-        'activo': true, // Campo requerido por el backend
-      },
+      data: data,
     );
 
     if (response.isSuccess && response.data != null) {

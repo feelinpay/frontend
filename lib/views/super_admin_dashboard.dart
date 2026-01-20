@@ -75,7 +75,26 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     });
 
     try {
-      final response = await _userService.getStatistics();
+      var response = await _userService.getStatistics();
+
+      // AUTO-FIX: Si es 403 o 401, intentar refrescar token y reintentar
+      if (response.statusCode == 403 || response.statusCode == 401) {
+        debugPrint(
+          '🔒 Detectado ${response.statusCode}. Intentando refrescar permisos...',
+        );
+        if (mounted) {
+          final authController = Provider.of<AuthController>(
+            context,
+            listen: false,
+          );
+          final refreshed = await authController.silentRefreshToken();
+
+          if (refreshed) {
+            debugPrint('🔓 Permisos refrescados. Reintentando petición...');
+            response = await _userService.getStatistics();
+          }
+        }
+      }
 
       if (response.isSuccess && response.data != null) {
         setState(() {
@@ -84,7 +103,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         });
       } else {
         setState(() {
-          _error = response.message;
+          _error = '${response.statusCode} - ${response.message}';
+          if (response.statusCode == 403) {
+            _error =
+                'Acceso Denegado (403): ${response.message}\n(Token antiguo persistente)';
+          }
           _isLoading = false;
         });
       }
@@ -177,6 +200,23 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             foregroundColor: Colors.white,
                           ),
                           child: const Text('Reintentar'),
+                        ),
+                        const SizedBox(height: DesignSystem.spacingM),
+                        TextButton.icon(
+                          onPressed: () {
+                            context.read<AuthController>().logout();
+                            Navigator.pushReplacementNamed(context, '/login');
+                          },
+                          icon: const Icon(
+                            Icons.logout,
+                            color: DesignSystem.textSecondary,
+                          ),
+                          label: const Text(
+                            'Cerrar Sesión (Refrescar Permisos)',
+                          ),
+                          style: TextButton.styleFrom(
+                            foregroundColor: DesignSystem.textSecondary,
+                          ),
                         ),
                       ],
                     ),

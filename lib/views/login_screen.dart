@@ -24,13 +24,20 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              authController.errorMessage ?? 'Error al iniciar sesión',
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Error de Autenticación'),
+            content: SelectableText(
+              authController.errorMessage ?? 'Error desconocido',
+              style: const TextStyle(color: Colors.red),
             ),
-            backgroundColor: DesignSystem.errorColor,
-            behavior: SnackBarBehavior.floating,
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cerrar'),
+              ),
+            ],
           ),
         );
       }

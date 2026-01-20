@@ -1,0 +1,4 @@
+-keep class androidx.window.** { *; }
+-keep class androidx.window.extensions.** { *; }
+-dontwarn androidx.window.**
+-dontwarn androidx.window.extensions.**

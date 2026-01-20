@@ -1,28 +1,18 @@
 import 'package:flutter/foundation.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
+import 'package:googleapis_auth/googleapis_auth.dart' as auth;
 
 class GoogleDriveService {
   static const String _folderName = 'Reporte de Pagos - Feelin Pay';
 
-  final GoogleSignIn _googleSignIn;
-
-  GoogleDriveService(this._googleSignIn);
+  // Constructor no longer needs GoogleSignIn
+  GoogleDriveService();
 
   /// Inicializa la carpeta de reportes PRIVADA del usuario
   /// IMPORTANTE: Solo el usuario tiene acceso a esta carpeta
   /// Ningún servicio externo, bot o backend puede acceder a los datos
-  Future<String?> setupReportFolder() async {
+  Future<String?> setupReportFolder(auth.AuthClient httpClient) async {
     try {
-      final httpClient = await _googleSignIn.authenticatedClient();
-      if (httpClient == null) {
-        debugPrint(
-          '❌ [DRIVE SERVICE] No se pudo obtener el cliente autenticado',
-        );
-        return null;
-      }
-
       final driveApi = drive.DriveApi(httpClient);
 
       // 1. Buscar si la carpeta ya existe

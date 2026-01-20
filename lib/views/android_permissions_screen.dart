@@ -28,6 +28,7 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
   bool _isCheckingPermissions =
       false; // Guard para evitar ejecuciones concurrentes
   bool _showAutoStart = false;
+  bool _autoStartConfigured = false; // Manual confirmation via checkbox/dialog
   _AppLifecycleObserver? _lifecycleObserver;
 
   @override
@@ -41,9 +42,11 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
 
   Future<void> _initAutoStartCheck() async {
     final supported = await AutoStartService.isManufacturerSupported();
+    final configured = await AutoStartService.isAutoStartConfigured();
     if (mounted) {
       setState(() {
         _showAutoStart = supported;
+        _autoStartConfigured = configured;
       });
     }
   }
@@ -94,13 +97,17 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
     final systemAlertGranted =
         _permissions[Permission.systemAlertWindow]?.isGranted ?? false;
 
+    // Note: AutoStart is optional but user requested it to be mandatory if shown
+    if (_showAutoStart && !_autoStartConfigured) {
+      return false;
+    }
+
     return smsGranted &&
         notificationGranted &&
         _notificationListenerGranted &&
         batteryGranted &&
         exactAlarmGranted &&
         systemAlertGranted;
-    // Note: AutoStart is optional/advanced as it cannot be reliably detected
   }
 
   Future<void> _requestPermissions() async {
@@ -145,6 +152,13 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
     // 5. Mostrar sobre otras Apps
     if (await Permission.systemAlertWindow.isDenied) {
       await Permission.systemAlertWindow.request();
+      await _checkPermissions();
+      return;
+    }
+
+    // 6. Auto Start (Manual)
+    if (_showAutoStart && !_autoStartConfigured) {
+      await _handleAutoStartSequence();
       await _checkPermissions();
       return;
     }
@@ -370,18 +384,17 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
           title: 'Inicio Automático (Xiaomi/Samsung...)', // Updated title
           permission: null,
           isAutoStart: true,
-          isRequired: false, // Cannot detect
+          isGrantedOverride: _autoStartConfigured,
+          isRequired: true,
         ),
     ];
 
     return Column(
-      children: permissions
-          .map((p) => _buildPermissionItem(context, p))
-          .toList(),
+      children: permissions.map((p) => _buildPermissionItem(p)).toList(),
     );
   }
 
-  Widget _buildPermissionItem(BuildContext context, _PermissionData p) {
+  Widget _buildPermissionItem(_PermissionData p) {
     bool isGranted = false;
     if (p.permission != null) {
       isGranted = _permissions[p.permission!]?.isGranted ?? false;
@@ -397,7 +410,7 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
         } else if (p.permission != null) {
           await p.permission!.request();
         } else if (p.isAutoStart == true) {
-          await AutoStartService.openAutoStartSettings();
+          await _handleAutoStartSequence();
         } else if (p.permission == null && p.title.contains('Notificaciones')) {
           await PaymentNotificationService.openSettings();
         }
@@ -457,6 +470,71 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleAutoStartSequence() async {
+    // 1. Obtener instrucciones detalladas
+    final instructions = await AutoStartService.getAutoStartGuidance();
+
+    if (mounted) {
+      // 2. Mostrar diálogo PREVIO con instrucciones y botón Continuar
+      final shouldRedirect = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Habilitar Inicio Automático'),
+          content: Text(instructions),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false), // Cancelar
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true), // Continuar
+              style: ElevatedButton.styleFrom(
+                backgroundColor: DesignSystem.primaryColor,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Ir a Configuración'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldRedirect == true) {
+        // 3. Redirigir
+        await AutoStartService.openAutoStartSettings();
+
+        // 4. Al volver, preguntar si tuvo éxito
+        if (mounted) {
+          final confirm = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('¿Activaste el Inicio Automático?'),
+              content: const Text(
+                'Por favor confirma si realizaste los pasos indicados para que Feelin Pay funcione correctamente en segundo plano.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('No aún'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Sí, ya lo activé'),
+                ),
+              ],
+            ),
+          );
+          if (confirm == true) {
+            await AutoStartService.saveAutoStartConfigured(true);
+            setState(() {
+              _autoStartConfigured = true;
+            });
+          }
+        }
+      }
+    }
   }
 
   Widget _buildBottomActions(BuildContext context) {

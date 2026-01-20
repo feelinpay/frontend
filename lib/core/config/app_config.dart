@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 class AppConfig {
   // Configuración del servidor backend
   // Configuración del servidor backend - USAR localhost (REQUIERE ADB REVERSE)
-  static const String apiBaseUrl = 'http://localhost:3001/api';
+  // OLD Local: static const String apiBaseUrl = 'http://localhost:3001/api';
 
   // Configuración de CORS (para desarrollo)
   static const String corsOrigin = 'http://localhost:3001';
@@ -43,7 +43,7 @@ class AppConfig {
 
   // URLs de endpoints específicos
   static const String authEndpoint = '/auth';
-  static const String userManagementEndpoint = '/user-management';
+  // static const String userManagementEndpoint = '/user-management'; // UNUSED
   static const String systemEndpoint = '/system';
   static const String profileEndpoint = '/profile';
   static const String ownerEndpoint = '/owner';
@@ -97,6 +97,16 @@ class AppConfig {
 
   // Configuración de seguridad
   static const bool enableCertificatePinning = false;
+  // URL del Backend (Vercel Production)
+  static const String apiBaseUrl =
+      'https://backend-feelin-pays-projects.vercel.app/api';
+  static const String serverClientId =
+      '607923304959-39h6usdv60jhb446qmrsb05v74t335nc.apps.googleusercontent.com';
+  // static const String apiBaseUrl = 'http://10.0.2.2:3001/api'; // Android Emulator Localhost
+
+  // Timeout para peticiones HTTP
+  static const int connectTimeout = 30000; // 30 segundos
+  static const int receiveTimeout = 30000; // 30 segundos
   static const bool enableSSLVerification = true;
   static const bool enableNetworkSecurity = true;
 

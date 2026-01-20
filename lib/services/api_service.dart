@@ -25,9 +25,9 @@ class ApiService {
     _dio = Dio(
       BaseOptions(
         baseUrl: AppConfig.apiBaseUrl,
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 10),
-        sendTimeout: const Duration(seconds: 10),
+        connectTimeout: const Duration(milliseconds: AppConfig.connectTimeout),
+        receiveTimeout: const Duration(milliseconds: AppConfig.receiveTimeout),
+        sendTimeout: const Duration(milliseconds: AppConfig.connectTimeout),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -93,16 +93,20 @@ class ApiService {
               '❌ API Error: ${error.response?.statusCode ?? error.type} ${error.requestOptions.path}',
             );
             if (error.response?.data != null) {
-              debugPrint('🔍 Error Data: ${error.response?.data}');
+              String errorData = error.response?.data.toString() ?? '';
+              if (errorData.length > 500) {
+                errorData = '${errorData.substring(0, 500)}... [TRUNCATED]';
+              }
+              debugPrint('🔍 Error Data: $errorData');
             } else {
               debugPrint('🔍 Error Message: ${error.message}');
             }
           }
 
-          // Manejar token expirado (401)
-          if (error.response?.statusCode == 401) {
-            await _handleTokenExpired();
-          }
+          // Manejar token expirado (401) - DISABLED debugging 403/401 loop
+          // if (error.response?.statusCode == 401) {
+          //   await _handleTokenExpired();
+          // }
 
           // Manejar errores de red
           if (error.type == DioExceptionType.connectionTimeout ||
@@ -127,13 +131,6 @@ class ApiService {
     } catch (e) {
       debugPrint('Error loading stored token: $e');
     }
-  }
-
-  /// Manejar token expirado
-  Future<void> _handleTokenExpired() async {
-    await logout();
-    // Aquí se podría emitir un evento para redirigir al login
-    // usando un stream o notifier
   }
 
   /// Establecer token de autenticación
@@ -291,10 +288,15 @@ class ApiService {
       final statusCode = error.response?.statusCode ?? 500;
       final message = _getErrorMessage(error);
 
+      dynamic errors;
+      if (error.response?.data is Map<String, dynamic>) {
+        errors = error.response?.data['errors'];
+      }
+
       return ApiResponse<T>(
         success: false,
         message: message,
-        errors: error.response?.data?['errors'],
+        errors: errors,
         statusCode: statusCode,
       );
     }

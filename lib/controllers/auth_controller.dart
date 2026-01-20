@@ -28,7 +28,10 @@ class AuthController with ChangeNotifier {
   /// Inicializar el controlador
   Future<void> initialize() async {
     try {
-      // Intentar cargar usuario guardado si existe
+      // 1. Restaurar sesión (Backend Token + Google)
+      await _authService.loadSession();
+
+      // 2. Intentar cargar perfil de usuario si el token es válido
       final profile = await _authService.getProfile();
       if (profile.success && profile.data != null) {
         _currentUser = profile.data;
@@ -67,6 +70,26 @@ class AuthController with ChangeNotifier {
       _setError('Error en Google Sign-In: $e');
       return false;
     }
+  }
+
+  /// Refrescar token silenciosamente (sin loading UI)
+  Future<bool> silentRefreshToken() async {
+    try {
+      debugPrint('🔄 Intentando refrescar token silenciosamente...');
+      final response = await _authService.signInWithGoogle();
+
+      if (response.success && response.data != null) {
+        _currentUser = response.data;
+        debugPrint(
+          '✅ Token refrescado exitosamente. Nuevo Rol: ${_currentUser?.rol}',
+        );
+        notifyListeners();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error refrescando token: $e');
+    }
+    return false;
   }
 
   // ========================================

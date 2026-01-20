@@ -4,8 +4,14 @@ allprojects {
         mavenCentral()
     }
     
-    tasks.withType<JavaCompile>().configureEach {
-        options.compilerArgs.add("-nowarn")
+    // NUCLEAR: Forzar silencio absoluto en todos los subproyectos
+    gradle.projectsEvaluated {
+        tasks.withType<JavaCompile>().configureEach {
+            options.isDeprecation = false
+            options.isWarnings = false
+            // options.compilerArgs.clear() // REMOVED: Unsafe
+            options.compilerArgs.addAll(listOf("-Xlint:none", "-nowarn"))
+        }
     }
 }
 

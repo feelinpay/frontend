@@ -82,6 +82,7 @@ class _AddEmployeeDialogState extends State<AddEmployeeDialog> {
       final response = await _employeeService.createEmployee(
         nombre: _nameController.text,
         telefono: '${_selectedCountry.dialCode}$cleanPhone',
+        ownerId: widget.ownerId,
       );
 
       if (!mounted) return;

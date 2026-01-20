@@ -1,106 +1,204 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'google_drive_service.dart';
-import '../models/user_model.dart';
+import 'package:http/http.dart' as http;
+import 'package:googleapis_auth/googleapis_auth.dart' as auth;
+import 'package:shared_preferences/shared_preferences.dart'; // Keep this import as it's used by _saveAuthDataToPrefs
+import '../core/config/app_config.dart';
 import '../models/api_response.dart' as api_models;
+import '../models/user_model.dart';
 import 'api_service.dart';
+import 'google_drive_service.dart'; // Keep this import as it's used by setupReportFolder
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
-  AuthService._internal();
+
+  AuthService._internal() {
+    _initGoogleSignIn();
+  }
 
   final ApiService _apiService = ApiService();
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    serverClientId:
-        '607923304959-39h6usdv60jhb446qmrsb05v74t335nc.apps.googleusercontent.com',
-    scopes: ['email', 'https://www.googleapis.com/auth/drive.file'],
-  );
+
+  // Google Sign In v7 Instance
+  GoogleSignIn get _googleSignIn => GoogleSignIn.instance;
+
+  // Local state management for currentUser (since v7 is stateless)
+  GoogleSignInAccount? _currentUser;
+  final StreamController<GoogleSignInAccount?> _currentUserController =
+      StreamController<GoogleSignInAccount?>.broadcast();
+
+  // Scopes
+  final List<String> _scopes = [
+    'email',
+    'https://www.googleapis.com/auth/drive.file',
+  ];
+
+  Future<void> _initGoogleSignIn() async {
+    try {
+      await _googleSignIn.initialize(
+        serverClientId: AppConfig.serverClientId,
+        // No scopes here in v7
+      );
+
+      // Listen to auth events to update local state
+      _googleSignIn.authenticationEvents.listen((event) {
+        if (event is GoogleSignInAuthenticationEventSignIn) {
+          _currentUser = event.user;
+          _currentUserController.add(_currentUser);
+        } else if (event is GoogleSignInAuthenticationEventSignOut) {
+          _currentUser = null;
+          _currentUserController.add(null);
+        }
+      });
+    } catch (e) {
+      debugPrint('Error initializing GoogleSignIn: $e');
+    }
+  }
+
+  /// Restaura la sesión del backend y de Google si es posible
+  Future<bool> loadSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('bg_auth_token');
+
+      if (token != null && token.isNotEmpty) {
+        // 1. Restaurar token del backend
+        _apiService.setAuthToken(token);
+
+        // 2. Intentar restaurar sesión de Google silenciosamente
+        try {
+          final account = await _googleSignIn
+              .attemptLightweightAuthentication();
+          if (account != null) {
+            _currentUser = account;
+            _currentUserController.add(account);
+          }
+        } catch (e) {
+          // Google sign-in failure shouldn't block app start if backend token works
+          debugPrint('Silent Google Sign-In failed: $e');
+        }
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Error loading session: $e');
+    }
+    return false;
+  }
+
+  // Getters
+  Stream<GoogleSignInAccount?> get authStateChanges =>
+      _currentUserController.stream;
+  GoogleSignInAccount? get currentUser => _currentUser;
 
   // ========================================
   // LOGIN CON GOOGLE
   // ========================================
-
-  /// Iniciar sesión con Google
   Future<api_models.ApiResponse<UserModel>> signInWithGoogle() async {
     debugPrint('🔐 [AUTH SERVICE] Iniciando Google Sign In...');
+    debugPrint('🕵️ CALLER STACK TRACE:\n${StackTrace.current}');
 
     try {
-      // 0. Forzar cierre de sesión previo para permitir selección de cuenta (Debug)
-      await _googleSignIn.signOut();
+      // 1. Autenticar con Google (Identity)
+      // authenticate() in v7 returns a non-nullable Future<GoogleSignInAccount>
+      // and throws an exception if the sign in process is canceled or fails.
+      final GoogleSignInAccount account = await _googleSignIn.authenticate();
 
-      // 1. Autenticar con Google
-      final GoogleSignInAccount? account = await _googleSignIn.signIn();
+      // 2. Verificar/Solicitar Scopes (Authorization)
+      // En v7, usamos authorizationClient
+      // 1.5. Request specific scopes if not granted (v7 incremental authorization)
+      // Use authorizationClient to check permissions
+      bool isAuthorized =
+          await _googleSignIn.authorizationClient.authorizationForScopes(
+            _scopes,
+          ) !=
+          null;
 
-      if (account == null) {
+      if (!isAuthorized) {
+        debugPrint(
+          '🔐 [AUTH SERVICE] Solicitando permisos adicionales (Scopes)...',
+        );
+        try {
+          // authorizeScopes returns the auth object with accessToken
+          await _googleSignIn.authorizationClient.authorizeScopes(_scopes);
+          isAuthorized = true;
+        } catch (e) {
+          debugPrint('⚠️ Error solicitando scopes: $e');
+        }
+      }
+
+      if (!isAuthorized) {
         return api_models.ApiResponse<UserModel>(
           success: false,
-          message: 'Inicio de sesión cancelado',
-          statusCode: 400,
+          message: 'Permisos de Google Drive requeridos',
+          statusCode: 403,
         );
       }
 
-      // 2. Obtener token de autenticación
-      final GoogleSignInAuthentication auth = await account.authentication;
+      // 2. Obtener tokens
+      // Identity Token (for backend login)
+      // Note: In v7, authentication is a getter, not a Future
+      final GoogleSignInAuthentication auth = account.authentication;
       final String? idToken = auth.idToken;
-      final String? accessToken = auth.accessToken;
+
+      // Access Token (for Google Drive API)
+      String? accessToken;
+      try {
+        if (isAuthorized) {
+          // We already authorized earlier, but we need the token string explicitly
+          final authClient = await _googleSignIn.authorizationClient
+              .authorizeScopes(_scopes);
+          accessToken = authClient.accessToken;
+        }
+      } catch (e) {
+        debugPrint('⚠️ No se pudo obtener AccessToken para Drive: $e');
+      }
 
       if (idToken == null) {
         return api_models.ApiResponse<UserModel>(
           success: false,
-          message: 'No se pudo obtener el token de Google',
-          statusCode: 500,
+          message: 'No se pudo obtener el ID Token de Google',
+          statusCode: 401,
         );
       }
 
-      // 3. Setup de carpeta de Drive (Automático y Escalable)
+      // 3. Setup de carpeta de Drive
       String? driveFolderId;
       try {
-        final driveService = GoogleDriveService(_googleSignIn);
-        driveFolderId = await driveService.setupReportFolder();
-        debugPrint('✅ [AUTH SERVICE] Folder ID automático: $driveFolderId');
+        final authClient = await getAuthenticatedClient();
+        if (authClient != null) {
+          final driveService = GoogleDriveService();
+          driveFolderId = await driveService.setupReportFolder(authClient);
+          debugPrint('✅ [AUTH SERVICE] Folder ID automático: $driveFolderId');
+        } else {
+          debugPrint(
+            '⚠️ [AUTH SERVICE] No se pudo obtener cliente autenticado para Drive',
+          );
+        }
       } catch (e) {
         debugPrint('⚠️ [AUTH SERVICE] Error configurando Drive: $e');
       }
 
-      // 4. Enviar token al backend para autenticación
+      // 4. Enviar ID Token al backend para autenticación
+      debugPrint('🔐 [AUTH SERVICE] Enviando ID Token al backend...');
       final response = await _apiService.post<Map<String, dynamic>>(
         '/auth/google',
-        data: {
-          // Tokens
-          'idToken': idToken,
-          'token': idToken,
-          'id_token': idToken,
-          'googleToken': idToken,
-          'accessToken': accessToken,
-          'access_token': accessToken,
-          'refreshToken': account.serverAuthCode, // ✅ Para refresh automático
-          // Información del perfil
-          'email': account.email,
-          'name': account.displayName,
-          'photoUrl': account.photoUrl,
-          'id': account.id,
-
-          // Carpeta de Drive automática
-          'googleDriveFolderId': driveFolderId,
-        },
+        data: {'token': idToken, 'googleDriveFolderId': driveFolderId},
         requireAuth: false,
       );
 
       if (response.isSuccess && response.data != null) {
-        // Save token if present
-        if (response.data!['token'] != null) {
-          final token = response.data!['token'];
-          await _apiService.setAuthToken(token);
+        debugPrint('✅ [AUTH SERVICE] Login con Google exitoso en el backend.');
+        final String? token = response.data!['token'];
+        String? userId;
 
-          String? userId;
-          if (response.data!['user'] != null &&
+        if (token != null) {
+          _apiService.setAuthToken(token);
+          if (response.data!.containsKey('id')) {
+            userId = response.data!['id'].toString();
+          } else if (response.data!['user'] != null &&
               response.data!['user']['id'] != null) {
             userId = response.data!['user']['id'].toString();
-          } else if (response.data!['id'] != null) {
-            userId = response.data!['id'].toString();
           }
 
           if (userId != null) {
@@ -108,19 +206,13 @@ class AuthService {
           }
         }
 
-        // CACHEAR TOKEN DE GOOGLE EXPLÍCITAMENTE
-        try {
-          final auth = await account.authentication;
-          final gToken = auth.accessToken;
-          if (gToken != null) {
+        if (accessToken != null) {
+          try {
             final prefs = await SharedPreferences.getInstance();
-            await prefs.setString('bg_google_token', gToken);
-            debugPrint(
-              '✅ [AUTH SERVICE] Token de Google cacheado exitosamente tras login.',
-            );
+            await prefs.setString('bg_google_token', accessToken);
+          } catch (e) {
+            debugPrint('⚠️ Error cacheando token post-login: $e');
           }
-        } catch (e) {
-          debugPrint('⚠️ Error cacheando token post-login: $e');
         }
 
         return api_models.ApiResponse<UserModel>(
@@ -139,35 +231,24 @@ class AuthService {
       );
     } catch (error) {
       debugPrint('❌ [AUTH SERVICE] Error detallado Google Sign In: $error');
-      if (error is PlatformException) {
-        debugPrint('❌ [AUTH SERVICE] PlatformException Code: ${error.code}');
-        debugPrint(
-          '❌ [AUTH SERVICE] PlatformException Message: ${error.message}',
-        );
-        debugPrint(
-          '❌ [AUTH SERVICE] PlatformException Details: ${error.details}',
-        );
-      }
+      // Fix strict type check for error.message
+      String errorMessage = error.toString();
+      /* if (error is PlatformException) { // Requires 'flutter/services.dart' which is not imported
+         errorMessage = error.message ?? errorMessage;
+      } */
+
       return api_models.ApiResponse<UserModel>(
         success: false,
-        message: 'Error iniciando sesión con Google: $error',
+        message: 'Error iniciando sesión con Google: $errorMessage',
         statusCode: 500,
       );
     }
   }
 
-  // ========================================
-  // GESTIÓN DE PERFIL
-  // ========================================
-
-  /// Obtener perfil del usuario actual
   Future<api_models.ApiResponse<UserModel>> getProfile() async {
     final response = await _apiService.get<Map<String, dynamic>>('/auth/me');
 
     if (response.isSuccess && response.data != null) {
-      debugPrint('🔍 [AUTH SERVICE] Datos del perfil recibidos del backend:');
-      debugPrint('🔍 [AUTH SERVICE] ${response.data}');
-
       return api_models.ApiResponse<UserModel>(
         success: true,
         message: response.message,
@@ -183,7 +264,6 @@ class AuthService {
     );
   }
 
-  /// Actualizar perfil completo
   Future<api_models.ApiResponse<UserModel>> updateProfile({
     required String nombre,
     required String telefono,
@@ -209,22 +289,14 @@ class AuthService {
     );
   }
 
-  // ========================================
-  // UTILIDADES
-  // ========================================
-
-  /// Verificar si está autenticado
   bool get isAuthenticated => _apiService.isAuthenticated;
-
-  /// Obtener token actual
   String? get currentToken => _apiService.authToken;
 
-  /// Cerrar sesión
   Future<void> logout() async {
+    await _googleSignIn.signOut();
     await _apiService.logout();
   }
 
-  /// Verificar si el usuario es Super Admin
   Future<bool> isSuperAdmin() async {
     try {
       final profileResponse = await getProfile();
@@ -238,42 +310,58 @@ class AuthService {
     return false;
   }
 
-  // Helper to save auth data for Background Service (SharedPreferences)
   Future<void> _saveAuthDataToPrefs(String token, String userId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('bg_auth_token', token);
       await prefs.setString('bg_user_id', userId);
-      debugPrint('Auth data saved to SharedPreferences for Background Service');
     } catch (e) {
       debugPrint('Error saving auth data to prefs: $e');
     }
   }
 
-  /// Recuperar el Access Token de Google actual
+  // Helper to expose authenticated client (Manual implementation for v7 compatibility)
+  Future<auth.AuthClient?> getAuthenticatedClient() async {
+    try {
+      final headers = await _googleSignIn.authorizationClient
+          .authorizationHeaders(_scopes);
+      if (headers == null) return null;
+
+      final client = http.Client();
+      return auth.authenticatedClient(
+        client,
+        auth.AccessCredentials(
+          auth.AccessToken(
+            'Bearer',
+            headers['Authorization']!.split(' ').last,
+            // Expiry is not provided by authorizationHeaders, assume valid for short duration
+            DateTime.now().add(const Duration(hours: 1)).toUtc(),
+          ),
+          null, // refreshToken
+          _scopes,
+        ),
+      );
+    } catch (e) {
+      debugPrint('⚠️ Error creando cliente autenticado: $e');
+      return null;
+    }
+  }
+
   Future<String?> getGoogleAccessToken() async {
     try {
-      // Si no hay usuario logueado en la instancia, intentamos signInSilently
-      if (_googleSignIn.currentUser == null) {
-        await _googleSignIn.signInSilently();
-      }
+      GoogleSignInAccount? user = _currentUser;
+      user ??= await _googleSignIn.attemptLightweightAuthentication();
 
-      final user = _googleSignIn.currentUser;
       if (user != null) {
-        final auth = await user.authentication;
-        final token = auth.accessToken;
-
-        // Cachear token para uso en background / procesos aislados
-        if (token != null) {
-          try {
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setString('bg_google_token', token);
-          } catch (e) {
-            debugPrint('⚠️ Error cacheando token de Google: $e');
-          }
+        // In v7, access token must be retrieved via authorizationClient
+        if (await _googleSignIn.authorizationClient.authorizationForScopes(
+              _scopes,
+            ) !=
+            null) {
+          final client = await _googleSignIn.authorizationClient
+              .authorizeScopes(_scopes);
+          return client.accessToken;
         }
-
-        return token;
       }
     } catch (e) {
       debugPrint('⚠️ Error obteniendo Google Access Token: $e');
