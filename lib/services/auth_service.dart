@@ -9,8 +9,6 @@ import '../models/api_response.dart' as api_models;
 import '../models/user_model.dart';
 import 'api_service.dart';
 import 'google_drive_service.dart';
-import 'unified_background_service.dart';
-import 'payment_notification_service.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -225,12 +223,9 @@ class AuthService {
   String? get currentToken => _apiService.authToken;
 
   Future<void> logout() async {
-    try {
-      await UnifiedBackgroundService.stop();
-      await PaymentNotificationService.stopListening();
-    } catch (e) {
-      debugPrint('⚠️ Error al detener servicio en logout: $e');
-    }
+    // NOTA: No detenemos los servicios aquí.
+    // La lógica de "Soft Stop" (Pausa) es manejada por el AuthController
+    // para evitar que Android revoque permisos por matar el servicio.
     await _googleSignIn.signOut();
     await _apiService.logout();
   }

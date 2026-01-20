@@ -10,6 +10,7 @@ import '../widgets/admin_drawer.dart';
 import '../core/widgets/responsive_widgets.dart';
 import '../services/unified_background_service.dart';
 import '../services/sms_service.dart';
+import '../services/employee_service.dart'; // NEW
 
 class OwnerDashboard extends StatefulWidget {
   const OwnerDashboard({super.key});
@@ -119,69 +120,42 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
     });
 
     try {
-      // Por ahora usamos datos mock
-      // OPTIMIZATION: Removed artificial delay for immediate loading
-      // await Future.delayed(const Duration(milliseconds: 500));
+      final employeeService = EmployeeService();
+      final response = await employeeService.getEmployees(
+          limit: 100); // Fetch enough employees to calculate basic stats
 
-      // NOTE: We are mocking data here, so 403 is unlikely unless we call a real endpoint.
-      // But if we add real calls later, this logic is ready.
-      // For now, if we had a real call:
-      // var response = await _ownerService.getStats(); ...
+      if (response.isSuccess && response.data != null) {
+        final employees = response.data!;
+        final total = employees.length;
+        final activos = employees.where((e) => e.activo).length;
+        final inactivos = total - activos;
 
-      // Since OwnerDashboard currently mocks data (lines 81-86), it won't trigger 403 yet.
-      // However, to respect the user's request for robustness, I will leave the structure ready
-      // or check if there's any other real call.
-      // The current code (lines 76-95) is purely local set state with mock data.
-
-      // Wait! The user said "Sucedío con todas las vistas".
-      // If OwnerDashboard uses mock data, how did it get "No tienes permisos"?
-      // Ah, maybe they clicked a BUTTON that triggers a real call?
-      // "Configuración del Sistema", "Gestión de Permisos", etc.
-
-      // If the dashboard MAIN view is failing, it implies `_loadStatistics` is doing something real.
-      // Looking at the CODE I viewed earlier for OwnerDashboard:
-      // It sets `_statistics` to a Map literal. It does NOT call an API.
-
-      // So... if the user saw "No tienes permisos" on Owner Dashboard, it was likely from the DRAWER
-      // or a specific button, OR I missed a real API call in `_startBackgroundServices`?
-
-      // `_startBackgroundServices` calls `UnifiedBackgroundService.initialize(user)`.
-      // If THAT fails with 403, it prints to console, but doesn't show a red screen.
-
-      // The RED SCREEN comes from `_error != null`.
-      // In `OwnerDashboard`, `_error` is only set in `catch (e)` of `_loadStatistics`.
-      // But `_loadStatistics` only does `setState`. It has no `await api`.
-
-      // ... Unless `_loadStatistics` WAS modified in a previous turn that I didn't see fully?
-      // Let me re-read OwnerDashboard CAREFULLY.
-
-      setState(() {
-        _statistics = {
-          'totalEmpleados': 0,
-          'empleadosActivos': 0,
-          'empleadosInactivos': 0,
-        };
-        _isLoading = false;
-      });
-
-      // It is MOCK data. It cannot fail with 403.
-      // So the user must be referring to SuperAdminDashboard OR they are clicking a menu item.
-
-      // "Sucedío con todas las vistas el tema de 'No tienes permisos para realizar esta acción'"
-      // Maybe "Todas las vistas" means "Any view I go to via the drawer"?
-
-      // In any case, I will apply the logic to SuperAdminDashboard (done) and
-      // I should check `SystemController` or `RoleManagementScreen` if they visit those.
-
-      // But for now, I will stick to what I know: SuperAdminDashboard DOES call API.
-      // I will NOT modify OwnerDashboard blindly if it has no API call.
-
-      // I will explain this to the user.
+        if (mounted) {
+          setState(() {
+            _statistics = {
+              'totalEmpleados': total,
+              'empleadosActivos': activos,
+              'empleadosInactivos': inactivos,
+            };
+            _isLoading = false;
+          });
+        }
+      } else {
+        throw Exception(response.message);
+      }
     } catch (e) {
-      setState(() {
-        _error = 'Error al cargar estadísticas: $e';
-        _isLoading = false;
-      });
+      debugPrint('Error loading stats: $e');
+      if (mounted) {
+        setState(() {
+          // Fallback to zeros (or keep previous) but don't show error screen for stats
+          _statistics = {
+            'totalEmpleados': 0,
+            'empleadosActivos': 0,
+            'empleadosInactivos': 0,
+          };
+          _isLoading = false;
+        });
+      }
     }
   }
 
