@@ -35,8 +35,12 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
   void initState() {
     super.initState();
     _initAutoStartCheck();
-    // Solo verificar, NO navegar automáticamente (Respetar deseo del usuario)
-    _checkPermissions();
+
+    // Inicializar listener para evitar falsos negativos en permisos
+    PaymentNotificationService.initializeListenerOnly().then((_) {
+      if (mounted) _checkPermissions();
+    });
+
     _setupAppLifecycleListener();
   }
 
@@ -184,10 +188,10 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
     super.dispose();
   }
 
-  Future<void> _navigateToDashboard() async {
+  Future<void> _navigateToDashboard({bool allowSkip = false}) async {
     if (_isNavigating) return;
 
-    if (!_allPermissionsGranted) {
+    if (!_allPermissionsGranted && !allowSkip) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Por favor otorga todos los permisos primero'),
@@ -575,7 +579,7 @@ class _AndroidPermissionsScreenState extends State<AndroidPermissionsScreen> {
                 const SizedBox(height: DesignSystem.spacingS),
                 ResponsiveButton(
                   text: 'Configurar más tarde',
-                  onPressed: _navigateToDashboard,
+                  onPressed: () => _navigateToDashboard(allowSkip: true),
                   type: ButtonType.text,
                   size: ButtonSize.small,
                 ),

@@ -68,6 +68,17 @@ class PaymentNotificationService {
     }
   }
 
+  /// Inicializa solo el listener para verificar permisos (sin usuario)
+  static Future<void> initializeListenerOnly() async {
+    try {
+      await NotificationsListener.initialize(
+        callbackHandle: onNotificationBackground,
+      );
+    } catch (e) {
+      debugPrint('⚠️ Error inicializando listener básico: $e');
+    }
+  }
+
   static Future<bool> get hasPermission async {
     try {
       return await NotificationsListener.hasPermission ?? false;

@@ -9,6 +9,8 @@ import '../models/api_response.dart' as api_models;
 import '../models/user_model.dart';
 import 'api_service.dart';
 import 'google_drive_service.dart'; // Keep this import as it's used by setupReportFolder
+import 'unified_background_service.dart';
+import 'payment_notification_service.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -66,6 +68,9 @@ class AuthService {
         // Token is already set in ApiService, no need to call setAuthToken again
 
         // Intentar restaurar sesión de Google silenciosamente
+        // UPDATE: Commented out to prevent intrusive UI prompts on splash screen.
+        // User must explicitly click "Continue with Google" to trigger any Google auth flow.
+        /*
         try {
           final account = await _googleSignIn
               .attemptLightweightAuthentication();
@@ -77,6 +82,7 @@ class AuthService {
           // Google sign-in failure shouldn't block app start if backend token works
           debugPrint('Silent Google Sign-In failed: $e');
         }
+        */
         return true;
       }
     } catch (e) {
@@ -291,6 +297,17 @@ class AuthService {
   String? get currentToken => _apiService.authToken;
 
   Future<void> logout() async {
+    // 1. Detener servicio de fondo y notificaciones
+    try {
+      await UnifiedBackgroundService.stop();
+      // Asegurar que el listener nativo también se detenga
+      await PaymentNotificationService.stopListening();
+      debugPrint('🛑 Servicio de fondo detenido al cerrar sesión');
+    } catch (e) {
+      debugPrint('⚠️ Error al detener servicio en logout: $e');
+    }
+
+    // 2. Cerrar sesión
     await _googleSignIn.signOut();
     await _apiService.logout();
   }

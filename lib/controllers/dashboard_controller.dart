@@ -30,8 +30,7 @@ class DashboardController extends ChangeNotifier {
           .toJson(); // AuthService returns UserModel, converting to Map for compatibility
       notifyListeners();
 
-      await loadEstadisticas();
-      await verificarBotonPrueba();
+      await Future.wait([loadEstadisticas(), verificarBotonPrueba()]);
     } catch (e) {
       await AuthService().logout();
     } finally {
