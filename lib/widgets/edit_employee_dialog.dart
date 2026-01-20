@@ -11,12 +11,14 @@ class EditEmployeeDialog extends StatefulWidget {
   final String ownerId;
   final EmployeeModel employee;
   final Function(EmployeeModel) onEmployeeUpdated;
+  final bool isSuperAdmin;
 
   const EditEmployeeDialog({
     super.key,
     required this.ownerId,
     required this.employee,
     required this.onEmployeeUpdated,
+    this.isSuperAdmin = false,
   });
 
   @override
@@ -111,6 +113,7 @@ class _EditEmployeeDialogState extends State<EditEmployeeDialog> {
         employeeId: widget.employee.id,
         nombre: _nameController.text,
         telefono: '${_selectedCountry.dialCode}$cleanPhone',
+        ownerId: widget.isSuperAdmin ? widget.ownerId : null,
       );
 
       if (!mounted) return;

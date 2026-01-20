@@ -10,11 +10,13 @@ import '../utils/error_helper.dart';
 class AddEmployeeDialog extends StatefulWidget {
   final String ownerId; // Optional: If adding for a specific owner
   final Function(EmployeeModel) onEmployeeAdded;
+  final bool isSuperAdmin;
 
   const AddEmployeeDialog({
     super.key,
     required this.ownerId,
     required this.onEmployeeAdded,
+    this.isSuperAdmin = false,
   });
 
   @override
@@ -82,7 +84,8 @@ class _AddEmployeeDialogState extends State<AddEmployeeDialog> {
       final response = await _employeeService.createEmployee(
         nombre: _nameController.text,
         telefono: '${_selectedCountry.dialCode}$cleanPhone',
-        ownerId: widget.ownerId,
+        // Only pass ownerId if acting as Super Admin to trigger the correct endpoint
+        ownerId: widget.isSuperAdmin ? widget.ownerId : null,
       );
 
       if (!mounted) return;

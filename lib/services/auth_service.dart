@@ -145,7 +145,12 @@ class AuthService {
       debugPrint('🔐 [AUTH SERVICE] Enviando ID Token al backend...');
       final response = await _apiService.post<Map<String, dynamic>>(
         '/auth/google',
-        data: {'token': idToken, 'googleDriveFolderId': driveFolderId},
+        data: {
+          'token': idToken,
+          'googleDriveFolderId': driveFolderId,
+          'accessToken': freshAccessToken ??
+              accessToken, // Send Access Token for Backend Drive Ops
+        },
         requireAuth: false,
       );
 

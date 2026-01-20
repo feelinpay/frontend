@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/design/design_system.dart';
+import 'package:flutter_notification_listener_plus/flutter_notification_listener_plus.dart';
 import '../controllers/auth_controller.dart';
 import '../widgets/three_dots_menu_widget.dart';
 import '../widgets/app_header.dart';
@@ -50,13 +51,57 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
         if (user != null) {
           debugPrint("🚀 OwnerDashboard: Iniciando servicio unificado...");
 
-          // Inicializar y arrancar servicio unificado
-          await UnifiedBackgroundService.initialize(user);
-          await UnifiedBackgroundService.start();
+          // 1. Verificar permiso de Notifications Listener
+          bool hasPermission = false;
+          try {
+            hasPermission =
+                (await NotificationsListener.hasPermission) ?? false;
+          } catch (e) {
+            debugPrint("⚠️ Error verificando permisos de listener: $e");
+          }
 
-          debugPrint("✅ Servicio unificado iniciado correctamente");
+          if (!mounted) return;
 
-          await SMSService.procesarSMSPendientes();
+          if (!hasPermission) {
+            debugPrint("⚠️ Permiso de notificaciones perdido/no otorgado.");
+            // Mostrar diálogo de advertencia
+            // ignore: use_build_context_synchronously
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => AlertDialog(
+                title: const Text('Permiso Requerido'),
+                content: const Text(
+                  'El permiso de "Acceso a Notificaciones" se ha desactivado.\n\n'
+                  'Sin este permiso, la app NO puede detectar los pagos de Yape/Plin.\n\n'
+                  'Por favor, actívalo nuevamente.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(
+                          context); // Cerrar diálogo, pero riesgo de no funcionar
+                    },
+                    child: const Text('Más tarde'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      NotificationsListener.openPermissionSettings();
+                    },
+                    child: const Text('Activar Ahora'),
+                  ),
+                ],
+              ),
+            );
+          } else {
+            // 2. Inicializar y arrancar servicio unificado solo si hay permiso (o intentar igual)
+            await UnifiedBackgroundService.initialize(user);
+            await UnifiedBackgroundService.start();
+
+            debugPrint("✅ Servicio unificado iniciado correctamente");
+            await SMSService.procesarSMSPendientes();
+          }
         }
       } catch (e) {
         // Silently fail or log if needed, but don't crash dashboard
@@ -174,53 +219,53 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
                     ),
                   )
                 : _error != null
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          size: 64,
-                          color: DesignSystem.errorColor,
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.error_outline,
+                              size: 64,
+                              color: DesignSystem.errorColor,
+                            ),
+                            const SizedBox(height: DesignSystem.spacingM),
+                            Text(
+                              _error!,
+                              style: const TextStyle(
+                                color: DesignSystem.errorColor,
+                                fontSize: 16,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: DesignSystem.spacingM),
+                            ElevatedButton(
+                              onPressed: _loadStatistics,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: DesignSystem.primaryColor,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('Reintentar'),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: DesignSystem.spacingM),
-                        Text(
-                          _error!,
-                          style: const TextStyle(
-                            color: DesignSystem.errorColor,
-                            fontSize: 16,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: DesignSystem.spacingM),
-                        ElevatedButton(
-                          onPressed: _loadStatistics,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: DesignSystem.primaryColor,
-                            foregroundColor: Colors.white,
-                          ),
-                          child: const Text('Reintentar'),
-                        ),
-                      ],
-                    ),
-                  )
-                : ResponsiveContainer(
-                    maxWidth: 1000,
-                    padding: const EdgeInsets.all(DesignSystem.spacingM),
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Estadísticas principales
-                          _buildStatsSection(),
-                          const SizedBox(height: DesignSystem.spacingXL),
+                      )
+                    : ResponsiveContainer(
+                        maxWidth: 1000,
+                        padding: const EdgeInsets.all(DesignSystem.spacingM),
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Estadísticas principales
+                              _buildStatsSection(),
+                              const SizedBox(height: DesignSystem.spacingXL),
 
-                          // Atajos de Gestión
-                          _buildManagementShortcuts(context),
-                        ],
+                              // Atajos de Gestión
+                              _buildManagementShortcuts(context),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
           ),
         ],
       ),

@@ -50,7 +50,9 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen> {
     });
 
     try {
-      final response = await _employeeService.getEmployees();
+      final response = await _employeeService.getEmployees(
+        ownerId: widget.owner.id,
+      );
 
       if (response.isSuccess && response.data != null) {
         setState(() {
@@ -166,7 +168,10 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen> {
     bool newState,
   ) async {
     try {
-      final response = await _employeeService.toggleEmployeeStatus(employee.id);
+      final response = await _employeeService.toggleEmployeeStatus(
+        employee.id,
+        ownerId: widget.owner.id,
+      );
       return response.isSuccess;
     } catch (e) {
       return false;
@@ -178,6 +183,7 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen> {
       context: context,
       builder: (context) => AddEmployeeDialog(
         ownerId: widget.owner.id,
+        isSuperAdmin: true,
         onEmployeeAdded: (employee) {
           setState(() {
             _employees.add(employee);
@@ -219,7 +225,10 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen> {
       SnackBarHelper.showLoading(context, 'Eliminando empleado...');
 
       try {
-        final response = await _employeeService.deleteEmployee(employee.id);
+        final response = await _employeeService.deleteEmployee(
+          employee.id,
+          ownerId: widget.owner.id,
+        );
 
         if (response.isSuccess) {
           setState(() {
@@ -271,7 +280,6 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen> {
           Expanded(child: _buildEmployeeList()),
         ],
       ),
-
       floatingActionButton: FloatingActionButton(
         onPressed: _addEmployee,
         backgroundColor: DesignSystem.primaryColor,
@@ -519,7 +527,10 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen> {
 
     try {
       final newState = !employee.activo;
-      final response = await _employeeService.toggleEmployeeStatus(employee.id);
+      final response = await _employeeService.toggleEmployeeStatus(
+        employee.id,
+        ownerId: widget.owner.id,
+      );
 
       if (response.isSuccess) {
         setState(() {
@@ -555,6 +566,7 @@ class _OwnerEmployeesScreenState extends State<OwnerEmployeesScreen> {
       context: context,
       builder: (context) => EditEmployeeDialog(
         ownerId: widget.owner.id,
+        isSuperAdmin: true,
         employee: employee,
         onEmployeeUpdated: (updatedEmployee) {
           setState(() {

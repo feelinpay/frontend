@@ -14,12 +14,18 @@ class EmployeeService {
   // GESTIÓN DE EMPLEADOS
   // ========================================
 
-  /// Obtener lista de empleados del usuario actual
+  // ========================================
+  // GESTIÓN DE EMPLEADOS
+  // ========================================
+
+  /// Obtener lista de empleados
+  /// [ownerId] es opcional. Si se proporciona, usa el endpoint de Super Admin para ver los empleados de ese usuario.
   Future<api_models.ApiResponse<List<EmployeeModel>>> getEmployees({
     int page = 1,
     int limit = 20,
     String? search,
     bool? activo,
+    String? ownerId,
   }) async {
     final queryParams = <String, dynamic>{'page': page, 'limit': limit};
 
@@ -31,8 +37,15 @@ class EmployeeService {
       queryParams['activo'] = activo;
     }
 
+    String endpoint;
+    if (ownerId != null && ownerId.isNotEmpty) {
+      endpoint = '${AppConfig.superAdminEndpoint}/users/$ownerId/employees';
+    } else {
+      endpoint = '${AppConfig.ownerEndpoint}/employees';
+    }
+
     final response = await _apiService.get<Map<String, dynamic>>(
-      '${AppConfig.ownerEndpoint}/employees',
+      endpoint,
       queryParameters: queryParams,
     );
 
@@ -42,19 +55,14 @@ class EmployeeService {
       // El backend devuelve: { "empleados": [...], "pagination": {...} }
       List<dynamic> employeesList;
       if (data['empleados'] != null) {
-        // Formato correcto del backend: { "empleados": [...] }
         employeesList = data['empleados'] as List<dynamic>;
       } else if (data['employees'] != null) {
-        // Formato alternativo: { "employees": [...] }
         employeesList = data['employees'] as List<dynamic>;
       } else if (data['data'] != null && data['data'] is List) {
-        // Formato: { "data": [...] }
         employeesList = data['data'] as List<dynamic>;
       } else if (data.containsKey('id')) {
-        // Si es un solo empleado, lo convertimos a lista
         employeesList = [data];
       } else {
-        // Si no hay empleados, lista vacía
         employeesList = [];
       }
 
@@ -79,11 +87,20 @@ class EmployeeService {
 
   /// Obtener empleado específico por ID
   Future<api_models.ApiResponse<EmployeeModel>> getEmployee(
-    String employeeId,
-  ) async {
-    final response = await _apiService.get<Map<String, dynamic>>(
-      '${AppConfig.ownerEndpoint}/employees/$employeeId',
-    );
+    String employeeId, {
+    String? ownerId,
+  }) async {
+    // Note: Admin get single employee endpoint might be slightly different or not implemented individually
+    // Assuming structure: /users/:userId/employees/:employeeId
+    String endpoint;
+    if (ownerId != null && ownerId.isNotEmpty) {
+      endpoint =
+          '${AppConfig.superAdminEndpoint}/users/$ownerId/employees/$employeeId';
+    } else {
+      endpoint = '${AppConfig.ownerEndpoint}/employees/$employeeId';
+    }
+
+    final response = await _apiService.get<Map<String, dynamic>>(endpoint);
 
     if (response.isSuccess && response.data != null) {
       return api_models.ApiResponse<EmployeeModel>(
@@ -110,15 +127,21 @@ class EmployeeService {
     final Map<String, dynamic> data = {
       'nombre': nombre,
       'telefono': telefono,
-      'activo': true, // Campo requerido por el backend
+      'activo': true,
     };
 
+    String endpoint;
     if (ownerId != null && ownerId.isNotEmpty) {
-      data['ownerId'] = ownerId;
+      // Admin Endpoint: POST /users/:userId/employees
+      endpoint = '${AppConfig.superAdminEndpoint}/users/$ownerId/employees';
+      // data['ownerId'] is not needed in body because it's in URL, but harmless if present
+    } else {
+      endpoint = '${AppConfig.ownerEndpoint}/employees';
+      if (ownerId != null) data['ownerId'] = ownerId; // Legacy handling
     }
 
     final response = await _apiService.post<Map<String, dynamic>>(
-      '${AppConfig.ownerEndpoint}/employees',
+      endpoint,
       data: data,
     );
 
@@ -143,9 +166,18 @@ class EmployeeService {
     required String employeeId,
     required String nombre,
     required String telefono,
+    String? ownerId,
   }) async {
+    String endpoint;
+    if (ownerId != null && ownerId.isNotEmpty) {
+      endpoint =
+          '${AppConfig.superAdminEndpoint}/users/$ownerId/employees/$employeeId';
+    } else {
+      endpoint = '${AppConfig.ownerEndpoint}/employees/$employeeId';
+    }
+
     final response = await _apiService.put<Map<String, dynamic>>(
-      '${AppConfig.ownerEndpoint}/employees/$employeeId',
+      endpoint,
       data: {'nombre': nombre, 'telefono': telefono},
     );
 
@@ -167,11 +199,18 @@ class EmployeeService {
 
   /// Activar/Desactivar empleado
   Future<api_models.ApiResponse<EmployeeModel>> toggleEmployeeStatus(
-    String employeeId,
-  ) async {
-    final response = await _apiService.patch<Map<String, dynamic>>(
-      '${AppConfig.ownerEndpoint}/employees/$employeeId/toggle',
-    );
+    String employeeId, {
+    String? ownerId,
+  }) async {
+    String endpoint;
+    if (ownerId != null && ownerId.isNotEmpty) {
+      endpoint =
+          '${AppConfig.superAdminEndpoint}/users/$ownerId/employees/$employeeId/toggle';
+    } else {
+      endpoint = '${AppConfig.ownerEndpoint}/employees/$employeeId/toggle';
+    }
+
+    final response = await _apiService.patch<Map<String, dynamic>>(endpoint);
 
     if (response.isSuccess && response.data != null) {
       return api_models.ApiResponse<EmployeeModel>(
@@ -190,10 +229,19 @@ class EmployeeService {
   }
 
   /// Eliminar empleado
-  Future<api_models.ApiResponse<void>> deleteEmployee(String employeeId) async {
-    final response = await _apiService.delete<Map<String, dynamic>>(
-      '${AppConfig.ownerEndpoint}/employees/$employeeId',
-    );
+  Future<api_models.ApiResponse<void>> deleteEmployee(
+    String employeeId, {
+    String? ownerId,
+  }) async {
+    String endpoint;
+    if (ownerId != null && ownerId.isNotEmpty) {
+      endpoint =
+          '${AppConfig.superAdminEndpoint}/users/$ownerId/employees/$employeeId';
+    } else {
+      endpoint = '${AppConfig.ownerEndpoint}/employees/$employeeId';
+    }
+
+    final response = await _apiService.delete<Map<String, dynamic>>(endpoint);
 
     return api_models.ApiResponse<void>(
       success: response.isSuccess,
@@ -275,7 +323,7 @@ class EmployeeService {
   /// Obtener configuración de notificaciones de empleados
   /// Las notificaciones se manejan a través del campo 'activo' de cada empleado
   Future<api_models.ApiResponse<List<EmployeeModel>>>
-  getNotificationConfigs() async {
+      getNotificationConfigs() async {
     // Simplemente devolver los empleados ya que las notificaciones están en el campo 'activo'
     return await getEmployees();
   }
@@ -337,9 +385,8 @@ class EmployeeService {
       final results = await Future.wait(futures);
 
       // Verificar si alguna falló
-      final failedUpdates = results
-          .where((result) => !result.isSuccess)
-          .toList();
+      final failedUpdates =
+          results.where((result) => !result.isSuccess).toList();
 
       if (failedUpdates.isNotEmpty) {
         final failedNames = employees
