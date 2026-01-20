@@ -78,6 +78,17 @@
             android:exported="false"
             tools:replace="android:exported" />
         
+        <!-- BroadcastReceiver para iniciar servicio al encender el dispositivo -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </receiver>
+        
 
             
     </application>
