@@ -75,19 +75,25 @@ class AuthController with ChangeNotifier {
   /// Refrescar token silenciosamente (sin loading UI)
   Future<bool> silentRefreshToken() async {
     try {
-      debugPrint('🔄 Intentando refrescar token silenciosamente...');
-      final response = await _authService.signInWithGoogle();
+      debugPrint('🔄 Refrescando datos del usuario desde el servidor...');
+
+      // En lugar de re-autenticar con Google (que muestra popup),
+      // simplemente llamamos a /auth/me para obtener los datos actualizados del usuario
+      // El token JWT sigue siendo válido, solo necesitamos refrescar el objeto user
+      final response = await _authService.getProfile();
 
       if (response.success && response.data != null) {
         _currentUser = response.data;
         debugPrint(
-          '✅ Token refrescado exitosamente. Nuevo Rol: ${_currentUser?.rol}',
+          '✅ Datos de usuario refrescados. Rol actual: ${_currentUser?.rol}',
         );
         notifyListeners();
         return true;
+      } else {
+        debugPrint('⚠️ No se pudo refrescar perfil: ${response.message}');
       }
     } catch (e) {
-      debugPrint('⚠️ Error refrescando token: $e');
+      debugPrint('⚠️ Error refrescando datos: $e');
     }
     return false;
   }

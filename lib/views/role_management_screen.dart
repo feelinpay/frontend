@@ -39,7 +39,21 @@ class _RoleManagementScreenState extends State<RoleManagementScreen> {
     });
 
     try {
-      final response = await _rolService.getRoles();
+      var response = await _rolService.getRoles();
+
+      // AUTO-FIX: Refresh token on permission error
+      if (response.statusCode == 403 || response.statusCode == 401) {
+        if (mounted) {
+          final authController = Provider.of<AuthController>(
+            context,
+            listen: false,
+          );
+          if (await authController.silentRefreshToken()) {
+            response = await _rolService.getRoles();
+          }
+        }
+      }
+
       if (response.isSuccess && response.data != null) {
         setState(() {
           _roles = response.data!;

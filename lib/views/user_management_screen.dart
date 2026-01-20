@@ -39,35 +39,91 @@ class _UserManagementScreenState extends State<UserManagementScreen>
   Future<void> _loadData() async {
     MembresiaService.clearCache();
     setState(() => _isInitialLoading = true);
+
+    // AUTO-FIX LOGIC
     try {
       _error = null;
-      // Cargar usuarios y roles en paralelo
-      await Future.wait([_loadUsers(), _loadRoles()]);
+
+      // 1. Attempt Load
+      var userResponse = await _userManagementService.getAllUsers();
+      var roleResponse = await _userManagementService.getRoles();
+
+      // 2. Check for Permission Errors
+      bool needsRefresh =
+          (userResponse.statusCode == 403 || userResponse.statusCode == 401) ||
+          (roleResponse.statusCode == 403 || roleResponse.statusCode == 401);
+
+      if (needsRefresh) {
+        debugPrint(
+          '🔒 Detectado 403/401 en UserManagement. Intentando refrescar...',
+        );
+        if (mounted) {
+          final authController = Provider.of<AuthController>(
+            context,
+            listen: false,
+          );
+          final refreshed = await authController.silentRefreshToken();
+
+          if (refreshed) {
+            // Retry
+            userResponse = await _userManagementService.getAllUsers();
+            roleResponse = await _userManagementService.getRoles();
+          }
+        }
+      }
+
+      // 3. Process Results
+      if (userResponse.isSuccess && userResponse.data != null) {
+        setState(() => _users = userResponse.data!);
+      } else {
+        throw Exception(userResponse.message);
+      }
+
+      if (roleResponse.isSuccess && roleResponse.data != null) {
+        setState(() => _roles = roleResponse.data!);
+      } else {
+        throw Exception(roleResponse.message);
+      }
+
       if (mounted) setState(() => _isInitialLoading = false);
     } catch (e) {
       if (mounted) {
         setState(() => _isInitialLoading = false);
-        // Error is handled by _buildErrorWidget via _error state or individual load methods could set it
-        // Check if _loadUsers sets state on error? No, it rethrows.
-        // So we should catch it here and set _error if we want the error widget.
         setState(() => _error = e.toString());
       }
     }
   }
 
+  // Helper methods no longer needed for data loading but kept if referenced elsewhere,
+  // or we can remove them if they are only used in _loadData.
+  // _loadUsers and _loadRoles were only used in _loadData.
+  // I will redefine them to be empty or just proxy to refresh the list if called by "Refresh" button.
+
   Future<void> _loadUsers() async {
+    // Used by "Refresh" button logic elsewhere?
+    // Yes, "_changeUserRole" calls "await _loadUsers();"
+    // So we must keep this method functional.
+
     final response = await _userManagementService.getAllUsers();
+    // AUTO-FIX for single calls
+    if (response.statusCode == 403 || response.statusCode == 401) {
+      if (mounted) {
+        final authController = Provider.of<AuthController>(
+          context,
+          listen: false,
+        );
+        if (await authController.silentRefreshToken()) {
+          final retry = await _userManagementService.getAllUsers();
+          if (retry.isSuccess && retry.data != null) {
+            setState(() => _users = retry.data!);
+            return;
+          }
+        }
+      }
+    }
+
     if (response.isSuccess && response.data != null) {
       setState(() => _users = response.data!);
-    } else {
-      throw Exception(response.message);
-    }
-  }
-
-  Future<void> _loadRoles() async {
-    final response = await _userManagementService.getRoles();
-    if (response.isSuccess && response.data != null) {
-      setState(() => _roles = response.data!);
     } else {
       throw Exception(response.message);
     }
