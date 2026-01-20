@@ -33,8 +33,7 @@ class UnifiedBackgroundService {
 
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
+            AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
 
     // 1. Configurar servicio
@@ -69,6 +68,11 @@ class UnifiedBackgroundService {
     debugPrint('🚀 Iniciando servicio unificado...');
     await service.startService();
     debugPrint('✅ Servicio unificado iniciado');
+  }
+
+  static Future<bool> get isRunning async {
+    final service = FlutterBackgroundService();
+    return await service.isRunning();
   }
 
   static Future<void> stop() async {
@@ -196,21 +200,17 @@ class UnifiedBackgroundService {
 
   static Future<void> _startNotificationListener() async {
     try {
-      // Inicializar el listener con el callback
-      await NotificationsListener.initialize(
-        callbackHandle: _onNotificationReceived,
+      // Usamos PaymentNotificationService para mantener la lógica centralizada
+      // y el estado sincronizado (_isListening = true).
+      // Pasamos foreground: false porque UnifiedBackgroundService ya provee la notificación persistente.
+      await PaymentNotificationService.startListening(
+        showDialog: false,
+        isForeground: false,
       );
 
-      // Iniciar el servicio del listener (sin foreground, ya lo maneja flutter_background_service)
-      await NotificationsListener.startService(
-        title: "Feelin Pay Listener",
-        description: "Servicio de escucha",
-        subTitle: "Activo",
-        showWhen: true,
-        foreground: false, // No crear otra notificación foreground
+      debugPrint(
+        '✅ NotificationsListener iniciado correctamente (vía PaymentNotificationService)',
       );
-
-      debugPrint('✅ NotificationsListener iniciado correctamente');
     } catch (e) {
       debugPrint('❌ Error en _startNotificationListener: $e');
       rethrow;

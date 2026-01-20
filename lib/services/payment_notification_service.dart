@@ -106,8 +106,15 @@ class PaymentNotificationService {
     }
   }
 
-  static Future<void> startListening({bool showDialog = false}) async {
-    debugPrint('🔔 [START] startListening called, showDialog=$showDialog');
+  static bool get isListening => _isListening;
+
+  static Future<void> startListening({
+    bool showDialog = false,
+    bool isForeground = true,
+  }) async {
+    debugPrint(
+      '🔔 [START] startListening called, showDialog=$showDialog, isForeground=$isForeground',
+    );
 
     if (_isListening) {
       debugPrint('ℹ️ El sistema ya está escuchando.');
@@ -127,14 +134,18 @@ class PaymentNotificationService {
         return;
       }
 
-      // 2. Iniciar el servicio NATIVO con notificación persistente
-      debugPrint('🚀 Llamando a startService con notificación persistente...');
+      // 2. Iniciar el servicio NATIVO
+      // Si isForeground es true, muestra su propia notificación persistente.
+      // Si es false, corre "silenciosamente" (útil si ya hay otro servicio foreground como UnifiedBackgroundService).
+      debugPrint(
+        '🚀 Llamando a startService (foreground=$isForeground)...',
+      );
       await NotificationsListener.startService(
         title: "Feelin Pay",
         description: "Escuchando notificaciones de pago",
         subTitle: "Servicio activo",
         showWhen: true,
-        foreground: true, // CRÍTICO: Muestra la notificación persistente
+        foreground: isForeground,
       );
       debugPrint('✅ startService completado exitosamente');
 

@@ -219,30 +219,7 @@ class AuthService {
   }
 
   // ... (Other methods remain largely same or simplified)
-  Future<api_models.ApiResponse<UserModel>> updateProfile({
-    required String nombre,
-    required String telefono,
-  }) async {
-    // (Implementation same as before)
-    final response = await _apiService.put<Map<String, dynamic>>(
-      '/auth/profile',
-      data: {'nombre': nombre, 'telefono': telefono},
-    );
-
-    if (response.isSuccess && response.data != null) {
-      return api_models.ApiResponse<UserModel>(
-        success: true,
-        message: response.message,
-        data: UserModel.fromJson(response.data!),
-      );
-    }
-    return api_models.ApiResponse<UserModel>(
-      success: false,
-      message: response.message,
-      errors: response.errors,
-      statusCode: response.statusCode,
-    );
-  }
+// Method removed: updateProfile was unused.
 
   bool get isAuthenticated => _apiService.isAuthenticated;
   String? get currentToken => _apiService.authToken;

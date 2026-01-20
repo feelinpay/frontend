@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'views/splash_screen.dart';
 import 'views/login_screen.dart';
-import 'views/system_permissions_screen.dart';
+
 import 'views/android_permissions_screen.dart'; // Restored
 import 'views/user_management_screen.dart';
 import 'views/role_management_screen.dart'; // NEW
@@ -16,7 +16,7 @@ import 'views/membership_reports_screen.dart'; // NEW
 import 'views/terms_of_service_screen.dart';
 import 'views/privacy_policy_screen.dart';
 import 'controllers/auth_controller.dart';
-import 'controllers/dashboard_controller.dart';
+
 import 'controllers/notification_controller.dart';
 import 'controllers/system_controller.dart';
 import 'services/api_service.dart';
@@ -25,7 +25,6 @@ import 'firebase_options.dart';
 
 // Crear instancias globales de los controladores
 final AuthController _authController = AuthController();
-final DashboardController _dashboardController = DashboardController();
 final NotificationController _notificationController = NotificationController();
 final SystemController _systemController = SystemController();
 
@@ -136,7 +135,6 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: _authController),
-        ChangeNotifierProvider.value(value: _dashboardController),
         ChangeNotifierProvider.value(value: _notificationController),
         ChangeNotifierProvider.value(value: _systemController),
       ],
@@ -166,9 +164,7 @@ class MyApp extends StatelessWidget {
             // Por defecto (propietario) va al dashboard de propietario
             return const OwnerDashboard();
           },
-          '/system-permissions': (context) => const SystemPermissionsScreen(),
           '/user-management': (context) => const UserManagementScreen(),
-
           '/employee-management': (context) => const EmployeeManagementScreen(),
           '/permissions-management': (context) => const RoleManagementScreen(),
           '/membership-management': (context) =>
