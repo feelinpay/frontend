@@ -7,6 +7,8 @@ import '../widgets/three_dots_menu_widget.dart';
 import '../widgets/admin_drawer.dart';
 import '../services/membresia_service.dart';
 import '../controllers/auth_controller.dart';
+import '../widgets/assign_membership_dialog.dart';
+import '../models/user_model.dart';
 
 class MembershipReportsScreen extends StatefulWidget {
   const MembershipReportsScreen({super.key});
@@ -97,9 +99,27 @@ class _MembershipReportsScreenState extends State<MembershipReportsScreen> {
     _loadReports();
   }
 
-  void _showAssignMembershipDialog(String userId, String userName) {
-    _showSnackBar(
-      'Asignar membresía a $userName - Funcionalidad en desarrollo',
+  void _showAssignMembershipDialog(String userId, String userName) async {
+    // Create a temporary UserModel to pass to the dialog
+    final user = UserModel(
+      id: userId,
+      nombre: userName,
+      email: '',
+      rolId: 'mock-id',
+      activo: true,
+      permissions: [],
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+
+    await showDialog(
+      context: context,
+      builder: (context) => AssignMembershipDialog(
+        user: user,
+        onAssigned: () {
+          _loadReports();
+        },
+      ),
     );
   }
 
