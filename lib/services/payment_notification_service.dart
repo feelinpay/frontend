@@ -28,6 +28,8 @@ class PaymentNotificationService {
       FlutterLocalNotificationsPlugin();
 
   static bool _isListening = false;
+  static bool _isPaused =
+      false; // NEW: Flag para pausar procesamiento sin matar el servicio
   static UserModel? _currentUser;
 
   /// Inicializa el servicio y los plugins necesarios
@@ -98,13 +100,17 @@ class PaymentNotificationService {
 
   static Future<void> stopListening({bool killService = true}) async {
     try {
-      _isListening = false;
       if (killService) {
         await NotificationsListener.stopService();
+        _isListening = false;
+        _isPaused = false;
         debugPrint('⏹️ Servicio detenido totalmente (killService=true)');
       } else {
+        // PAUSA REAL: No matamos el servicio, solo pausamos el procesamiento interno
+        _isPaused = true;
+        // Mantenemos _isListening = true para que startListening() no intente reiniciar el servicio nativo
         debugPrint(
-            '⏸️ Servicio pausado (killService=false) - El listener sigue activo en Android pero ignorará eventos');
+            '⏸️ Servicio EN PAUSA (_isPaused=true). El listener nativo sigue activo pero se ignorarán eventos.');
       }
     } catch (e) {
       debugPrint('❌ Error deteniendo servicio: $e');
@@ -121,8 +127,12 @@ class PaymentNotificationService {
       '🔔 [START] startListening called, showDialog=$showDialog, isForeground=$isForeground',
     );
 
+    // RESETEAR PAUSA PROACTIVA
+    _isPaused = false;
+
     if (_isListening) {
-      debugPrint('ℹ️ El sistema ya está escuchando.');
+      debugPrint(
+          'ℹ️ El sistema ya está escuchando. Reanudando si estaba pausado.');
       return;
     }
 
@@ -218,6 +228,12 @@ class PaymentNotificationService {
       // LOG CRÍTICO PARA DEBUG: Ver qué llega realmente (USAR print para background)
       // ignore: avoid_print
       final logger = isBackground ? (Object? o) => print(o) : debugPrint;
+
+      // CHECK DE PAUSA: SI ESTÁ PAUSADO, IGNORAR EVENTO
+      if (_isPaused) {
+        logger('⏸️ Servicio en PAUSA. Ignorando evento de: ${evt.packageName}');
+        return;
+      }
 
       logger('----------------------------------------');
       logger('🔥 EVENTO DETECTADO:');
