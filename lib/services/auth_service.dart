@@ -59,14 +59,13 @@ class AuthService {
   /// Restaura la sesión del backend y de Google si es posible
   Future<bool> loadSession() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('bg_auth_token');
+      // Read token from secure storage (same place where ApiService saves it)
+      final token = await _apiService.getAuthToken();
 
       if (token != null && token.isNotEmpty) {
-        // 1. Restaurar token del backend
-        _apiService.setAuthToken(token);
+        // Token is already set in ApiService, no need to call setAuthToken again
 
-        // 2. Intentar restaurar sesión de Google silenciosamente
+        // Intentar restaurar sesión de Google silenciosamente
         try {
           final account = await _googleSignIn
               .attemptLightweightAuthentication();

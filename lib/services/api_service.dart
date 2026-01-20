@@ -139,7 +139,14 @@ class ApiService {
     await _storage.write(key: 'auth_token', value: token);
   }
 
-  /// Obtener token actual
+  /// Obtener token de autenticación desde secure storage
+  Future<String?> getAuthToken() async {
+    if (_authToken != null) return _authToken;
+    _authToken = await _storage.read(key: 'auth_token');
+    return _authToken;
+  }
+
+  /// Obtener token actual (en memoria)
   String? get authToken => _authToken;
 
   /// Verificar si está autenticado
