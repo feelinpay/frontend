@@ -96,7 +96,6 @@ class AuthService {
   // ========================================
   Future<api_models.ApiResponse<UserModel>> signInWithGoogle() async {
     debugPrint('🔐 [AUTH SERVICE] Iniciando Google Sign In...');
-    debugPrint('🕵️ CALLER STACK TRACE:\n${StackTrace.current}');
 
     try {
       // 1. Autenticar con Google (Identity)
